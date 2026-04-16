@@ -1,5 +1,6 @@
 # Patient data (Sensitive)
 data/
+data_rez/
 
 # Temporary test files
 parser_test.js
