@@ -92,7 +92,8 @@ async function callGeminiAI(apiKey, rawData) {
 ОСЬ ДАНІ:
 ${rawData.join('\n')}`;
 
-	const model = 'gemini-2.5-flash';
+    const model = 'gemini-2.5-flash-lite';
+	console.log('prompt', prompt);
 
     const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
         method: 'POST',
@@ -126,6 +127,7 @@ ${rawData.join('\n')}`;
 
     try {
         const content = candidate.content.parts[0].text;
+		console.log('json',JSON.parse(content));
         return JSON.parse(content);
     } catch (e) {
         console.log("Raw AI response:", candidate);
@@ -135,22 +137,36 @@ ${rawData.join('\n')}`;
 
 function updateTableWithResult(table, aiResult) {
     const tbody = table.querySelector('tbody');
-    // Зберігаємо заголовок (зазвичай перші 2 рядки у твоїй структурі)
-    const headerRows = Array.from(tbody.querySelectorAll('tr[data-row-type="template-header"], tr:has(th)'));
+    const rows = Array.from(tbody.querySelectorAll('tr'));
     
-    // Очищуємо дані, але залишаємо заголовок
-    const allRows = Array.from(tbody.querySelectorAll('tr'));
-    allRows.forEach(row => {
-        if (!headerRows.includes(row)) row.remove();
-    });
+    // Шукаємо індекс рядка, який є початком даних.
+    // У вашій таблиці шапка займає 2 рядки.
+    // Перший рядок має th з "Назва інструменту".
+    // Другий рядок має td з "Під час первинного...".
+    
+    let headerLastIndex = 1; // За замовчуванням припускаємо 2 рядки шапки (індекси 0 та 1)
+    
+    // Очищуємо всі рядки після шапки
+    for (let i = rows.length - 1; i > headerLastIndex; i--) {
+        rows[i].remove();
+    }
 
     // Додаємо нові рядки
     aiResult.forEach(item => {
         const tr = document.createElement('tr');
+        // Додаємо атрибути, які були в оригінальних рядках Health24 для стабільності
+        tr.setAttribute('data-entity-id', 'ai-generated-' + Math.random().toString(36).substr(2, 9));
+        
         tr.innerHTML = `
-            <td><div class="cell-content"><p>${item.instrument}</p></div></td>
-            <td><div class="cell-content"><p>${item.initial || ""}</p></div></td>
-            <td><div class="cell-content"><p>${item.final || ""}</p></div></td>
+            <td colspan="1" rowspan="1" colwidth="null" data-text-orientation="system_variables.diagnostic_report" style="position: relative;">
+                <div class="cell-content"><p>${item.instrument}</p></div>
+            </td>
+            <td colspan="1" rowspan="1" colwidth="null" data-text-orientation="system_variables.diagnostic_report" style="position: relative;">
+                <div class="cell-content"><p>${item.initial || ""}</p></div>
+            </td>
+            <td colspan="1" rowspan="1" colwidth="null" data-text-orientation="system_variables.diagnostic_report" style="position: relative;">
+                <div class="cell-content"><p>${item.final || ""}</p></div>
+            </td>
         `;
         tbody.appendChild(tr);
     });
