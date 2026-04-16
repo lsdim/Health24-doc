@@ -1,0 +1,9 @@
+# Patient data (Sensitive)
+data/
+
+# Temporary test files
+parser_test.js
+
+# Browser metadata
+.DS_Store
+Thumbs.db

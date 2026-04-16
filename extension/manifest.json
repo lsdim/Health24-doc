@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Health24 IRP Helper",
+  "version": "1.0",
+  "description": "Автоматичний розподіл даних діагностичних звітів в таблиці ІРП",
+  "permissions": ["storage"],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://mis.h24.ua/*"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "host_permissions": [
+    "https://generativelanguage.googleapis.com/*"
+  ]
+}

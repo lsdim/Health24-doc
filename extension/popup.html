@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        body { width: 300px; padding: 15px; font-family: sans-serif; }
+        h3 { margin-top: 0; font-size: 16px; color: #1976d2; }
+        .input-group { margin-bottom: 15px; }
+        label { display: block; margin-bottom: 5px; font-size: 12px; }
+        input { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { 
+            background: #1976d2; color: white; border: none; padding: 10px 15px; 
+            border-radius: 4px; cursor: pointer; width: 100%; 
+        }
+        button:hover { background: #1565c0; }
+        .footer { margin-top: 10px; font-size: 10px; color: #666; text-align: center; }
+        a { color: #1976d2; }
+    </style>
+</head>
+<body>
+    <h3>Налаштування IRP Helper</h3>
+    <div class="input-group">
+        <label for="apiKey">Gemini API Key:</label>
+        <input type="password" id="apiKey" placeholder="Вставте ключ сюди...">
+    </div>
+    <button id="saveBtn">Зберегти налаштування</button>
+    <div class="footer">
+        Отримати ключ можна на <a href="https://aistudio.google.com/app/apikey" target="_blank">Google AI Studio</a>
+    </div>
+    <script src="popup.js"></script>
+</body>
+</html>
