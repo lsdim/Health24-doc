@@ -2,29 +2,42 @@
 // Специфічний селектор для Health24 IRP таблиці (розділ 5)
 const TARGET_HEADERS = ["Назва інструменту", "Під час первинного обстеження", "Під час заключного/етапного обстеження"];
 
-// Додаємо кнопку при завантаженні та змінах
+// Використовуємо debounce, щоб не перевіряти DOM занадто часто
+let timeout = null;
 const observer = new MutationObserver(() => {
-    addHelperButton();
+    if (timeout) clearTimeout(timeout);
+    timeout = setTimeout(addHelperButton, 500); // Перевіряємо лише через 500мс після останньої зміни
 });
+
 observer.observe(document.body, { childList: true, subtree: true });
 
 function addHelperButton() {
-    // Шукаємо таблиці в редакторі
-    const tables = document.querySelectorAll('h24-editor-table table');
-    tables.forEach(table => {
+    // Шукаємо контейнери таблиць, які ще не мають нашої кнопки
+    const tableContainers = document.querySelectorAll('h24-editor-table:not(.irp-processed)');
+    
+    tableContainers.forEach(container => {
+        const table = container.querySelector('table');
+        if (!table) return;
+
+        // Позначаємо контейнер як "перевірений", щоб не заходити сюди знову
+        container.classList.add('irp-processed');
+
         const headerText = table.innerText;
-        // Перевіряємо, чи це та сама таблиця
-        if (TARGET_HEADERS.every(h => headerText.includes(h)) && !table.parentElement.querySelector('.irp-helper-btn')) {
+        if (TARGET_HEADERS.every(h => headerText.includes(h))) {
             const btn = document.createElement('button');
             btn.innerText = "🪄 Розподілити дані (Gemini AI)";
             btn.className = "irp-helper-btn";
+            btn.type = "button"; // Важливо для форм
+            
             btn.onclick = (e) => {
                 e.preventDefault();
+                e.stopPropagation();
                 processTable(table);
             };
             
-            // Вставляємо кнопку над таблицею
-            table.parentElement.insertBefore(btn, table);
+            // Вставляємо кнопку в спеціальне місце над таблицею, якщо воно є, або просто перед таблицею
+            const controls = container.querySelector('.table-controls') || table;
+            controls.parentNode.insertBefore(btn, controls);
         }
     });
 }
@@ -84,13 +97,38 @@ ${rawData.join('\n')}`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { response_mime_type: "application/json" }
+            generationConfig: { 
+                response_mime_type: "application/json",
+                temperature: 0.1 
+            }
         })
     });
 
     const json = await response.json();
-    const content = json.candidates[0].content.parts[0].text;
-    return JSON.parse(content);
+    
+    if (json.error) {
+        throw new Error(`API Error: ${json.error.message} (${json.error.status})`);
+    }
+
+    if (!json.candidates || json.candidates.length === 0) {
+        if (json.promptFeedback && json.promptFeedback.blockReason) {
+            throw new Error(`Блокування за безпекою: ${json.promptFeedback.blockReason}`);
+        }
+        throw new Error("ШІ не повернув жодного результату. Перевірте API ключ або ліміти.");
+    }
+
+    const candidate = json.candidates[0];
+    if (candidate.finishReason === "SAFETY") {
+        throw new Error("Відповідь заблокована фільтром безпеки Google.");
+    }
+
+    try {
+        const content = candidate.content.parts[0].text;
+        return JSON.parse(content);
+    } catch (e) {
+        console.log("Raw AI response:", candidate);
+        throw new Error("ШІ повернув некоректний формат даних. Спробуйте ще раз.");
+    }
 }
 
 function updateTableWithResult(table, aiResult) {
