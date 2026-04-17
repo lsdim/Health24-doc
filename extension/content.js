@@ -6,20 +6,18 @@ const TARGET_HEADERS = ["Назва інструменту", "Під час пе
 let timeout = null;
 const observer = new MutationObserver(() => {
     if (timeout) clearTimeout(timeout);
-    timeout = setTimeout(addHelperButton, 500); // Перевіряємо лише через 500мс після останньої зміни
+    timeout = setTimeout(addHelperButton, 500); 
 });
 
 observer.observe(document.body, { childList: true, subtree: true });
 
 function addHelperButton() {
-    // Шукаємо контейнери таблиць, які ще не мають нашої кнопки
     const tableContainers = document.querySelectorAll('h24-editor-table:not(.irp-processed)');
     
     tableContainers.forEach(container => {
         const table = container.querySelector('table');
         if (!table) return;
 
-        // Позначаємо контейнер як "перевірений", щоб не заходити сюди знову
         container.classList.add('irp-processed');
 
         const headerText = table.innerText;
@@ -27,7 +25,7 @@ function addHelperButton() {
             const btn = document.createElement('button');
             btn.innerText = "🪄 Розподілити дані (Gemini AI)";
             btn.className = "irp-helper-btn";
-            btn.type = "button"; // Важливо для форм
+            btn.type = "button";
             
             btn.onclick = (e) => {
                 e.preventDefault();
@@ -35,7 +33,6 @@ function addHelperButton() {
                 processTable(table);
             };
             
-            // Вставляємо кнопку в спеціальне місце над таблицею, якщо воно є, або просто перед таблицею
             const controls = container.querySelector('.table-controls') || table;
             controls.parentNode.insertBefore(btn, controls);
         }
@@ -52,7 +49,7 @@ async function processTable(table) {
     const rows = Array.from(table.querySelectorAll('tbody tr'));
     const dataToProcess = [];
 
-    // ПРОПУСКАЄМО перші 2 рядки (заголовок), щоб вони не плутали ШІ
+    // ПРОПУСКАЄМО перші 2 рядки (заголовок)
     for (let i = 2; i < rows.length; i++) {
         const firstCell = rows[i].cells[0];
         const text = firstCell ? firstCell.innerText.trim() : "";
@@ -70,8 +67,8 @@ async function processTable(table) {
     setLoading(true);
 
     try {
-        console.log('Дані, що відправляються на ШІ:', dataToProcess);
-        const result = await callGeminiAI(apiKey, dataToProcess);
+        //console.log('Дані для ШІ:', dataToProcess);
+        const result = await callGeminiAIWithFallback(apiKey, dataToProcess);
         updateTableWithResult(table, result);
     } catch (e) {
         console.error(e);
@@ -81,14 +78,49 @@ async function processTable(table) {
     }
 }
 
-async function callGeminiAI(apiKey, rawData) {
+async function callGeminiAIWithFallback(apiKey, rawData) {
+    // Актуальний список моделей на основі ваших тестів (v1beta)
+    const models = [
+        'gemini-2.5-flash-lite', 
+        'gemini-2.5-flash', 
+        'gemini-flash-latest',
+        'gemma-4-31b-it',
+        'gemma-3-27b-it',
+        'gemini-2.0-flash-lite', // fallback на випадок оновлення лімітів
+        'gemini-2.0-flash'
+    ];
+    let lastError = null;
+
+    for (const model of models) {
+        try {
+            console.log(`🚀 Спроба запиту до моделі: ${model}`);
+            setLoading(true, `⏳ Обробка (${model})...`);
+            return await callGeminiAI(apiKey, rawData, model);
+        } catch (e) {
+            lastError = e;
+            console.warn(`❌ Модель ${model} не спрацювала:`, e.message);
+
+            // Якщо помилка в API ключі - зупиняємось
+            if (e.message.includes('API_KEY_INVALID')) throw e;
+
+            // В інших випадках (503, 429, 404) пробуємо наступну
+            continue;
+        }
+    }
+    throw new Error(`Всі моделі недоступні. Остання помилка: ${lastError.message}`);
+}
+
+
+
+async function callGeminiAI(apiKey, rawData, modelName) {
     const prompt = `СУВОРА ІНСТРУКЦІЯ ДЛЯ МЕДИЧНОГО АНАЛІТИКА:
 Ти повинен перетворити список медичних результатів у структурований JSON. 
 КОЖЕН РЯДОК у вхідних даних починається з дати.
 
 АЛГОРИТМ ОБРОБКИ:
 1. ВИЗНАЧЕННЯ ПЕРІОДІВ:
-   - Знайди всі унікальні дати в тексті.
+   - Знайди всі унікальні дати в тексті (дати записанні у форматті dd.mm.yyyy).
+   - Записи розділенні роздільником '*******************************'
    - "initial" (первинне) = записи, що належать до НАЙРАНІШОЇ дати (наприклад, 16.03.2026).
    - "final" (заключне) = записи, що належать до НАЙПІЗНІШОЇ дати (наприклад, 02.04.2026).
    - ЗАБОРОНЕНО міняти їх місцями. Рання дата — завжди початкові дані.
@@ -108,14 +140,12 @@ async function callGeminiAI(apiKey, rawData) {
 ]
 Якщо для інструменту є дані лише за одну з дат — залиш інше поле порожнім "".
 
-ОСЬ ДАНІ ДЛЯ ОБРОБКИ:
+ОСЬ ДАНІ:
 ${rawData.join('\n')}`;
 
-    const model = 'gemini-2.5-flash-lite';
-    //const model = 'Gemma-4-31B';
-    console.log('Сформований промпт:', prompt);
+	console.log('запит до ШІ:', prompt);
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -134,24 +164,14 @@ ${rawData.join('\n')}`;
     }
 
     if (!json.candidates || json.candidates.length === 0) {
-        if (json.promptFeedback && json.promptFeedback.blockReason) {
-            throw new Error(`Блокування за безпекою: ${json.promptFeedback.blockReason}`);
-        }
-        throw new Error("ШІ не повернув жодного результату. Перевірте API ключ або ліміти.");
-    }
-
-    const candidate = json.candidates[0];
-    if (candidate.finishReason === "SAFETY") {
-        throw new Error("Відповідь заблокована фільтром безпеки Google.");
+        throw new Error("ШІ не повернув результат.");
     }
 
     try {
-        const content = candidate.content.parts[0].text;
-		console.log('json',JSON.parse(content));
+        const content = json.candidates[0].content.parts[0].text;
         return JSON.parse(content);
     } catch (e) {
-        console.log("Raw AI response:", candidate);
-        throw new Error("ШІ повернув некоректний формат даних. Спробуйте ще раз.");
+        throw new Error("Некоректний формат відповіді ШІ.");
     }
 }
 
@@ -159,23 +179,15 @@ function updateTableWithResult(table, aiResult) {
     const tbody = table.querySelector('tbody');
     const rows = Array.from(tbody.querySelectorAll('tr'));
     
-    // Шукаємо індекс рядка, який є початком даних.
-    // У вашій таблиці шапка займає 2 рядки.
-    // Перший рядок має th з "Назва інструменту".
-    // Другий рядок має td з "Під час первинного...".
+    let headerLastIndex = 1; 
     
-    let headerLastIndex = 1; // За замовчуванням припускаємо 2 рядки шапки (індекси 0 та 1)
-    
-    // Очищуємо всі рядки після шапки
     for (let i = rows.length - 1; i > headerLastIndex; i--) {
         rows[i].remove();
     }
 
-    // Додаємо нові рядки
     aiResult.forEach(item => {
         const tr = document.createElement('tr');
-        // Додаємо атрибути, які були в оригінальних рядках Health24 для стабільності
-        tr.setAttribute('data-entity-id', 'ai-generated-' + Math.random().toString(36).substr(2, 9));
+        tr.setAttribute('data-entity-id', 'ai-' + Math.random().toString(36).substr(2, 9));
         
         tr.innerHTML = `
             <td colspan="1" rowspan="1" colwidth="null" data-text-orientation="system_variables.diagnostic_report" style="position: relative;">
@@ -192,10 +204,10 @@ function updateTableWithResult(table, aiResult) {
     });
 }
 
-function setLoading(isLoading) {
+function setLoading(isLoading, customText) {
     const btn = document.querySelector('.irp-helper-btn');
     if (btn) {
         btn.disabled = isLoading;
-        btn.innerText = isLoading ? "⏳ Обробка ШІ..." : "🪄 Розподілити дані (Gemini AI)";
+        btn.innerText = isLoading ? (customText || "⏳ Обробка ШІ...") : "🪄 Розподілити дані (Gemini AI)";
     }
 }
