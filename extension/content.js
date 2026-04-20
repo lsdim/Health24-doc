@@ -23,7 +23,7 @@ function addHelperButton() {
         const headerText = table.innerText;
         if (TARGET_HEADERS.every(h => headerText.includes(h))) {
             const btn = document.createElement('button');
-            btn.innerText = "🪄 Розподілити дані (Gemini AI)";
+            btn.innerText = "✨ Розподілити дані (Gemini AI)";
             btn.className = "irp-helper-btn";
             btn.type = "button";
             
@@ -112,8 +112,7 @@ async function callGeminiAIWithFallback(apiKey, rawData) {
 
 
 
-async function callGeminiAI(apiKey, rawData, modelName) {
-    const prompt = `СУВОРА ІНСТРУКЦІЯ ДЛЯ МЕДИЧНОГО АНАЛІТИКА:
+const DEFAULT_PROMPT_INSTRUCTIONS = `СУВОРА ІНСТРУКЦІЯ ДЛЯ МЕДИЧНОГО АНАЛІТИКА:
 Ти повинен перетворити список медичних результатів у структурований JSON. 
 КОЖЕН РЯДОК у вхідних даних починається з дати.
 
@@ -133,7 +132,14 @@ async function callGeminiAI(apiKey, rawData, modelName) {
 
 3. ОЧИЩЕННЯ ДАНИХ:
    - Не пропускай жодного значення, всі значення мають бути оброблені.
-   - НЕ додавай від себе жодних коментарів чи нових значень. Тільки те, що є в тексті.
+   - НЕ додавай від себе жодних коментарів чи нових значень. Тільки те, що є в тексті.`;
+
+async function callGeminiAI(apiKey, rawData, modelName) {
+    // Отримуємо кастомний промпт від користувача
+    const storage = await chrome.storage.local.get('custom_prompt');
+    const userInstructions = storage.custom_prompt || DEFAULT_PROMPT_INSTRUCTIONS;
+
+    const prompt = `${userInstructions}
 
 4. ВИХІДНИЙ ФОРМАТ (ТІЛЬКИ ЧИСТИЙ JSON МАСИВ):
 [
@@ -209,6 +215,6 @@ function setLoading(isLoading, customText) {
     const btn = document.querySelector('.irp-helper-btn');
     if (btn) {
         btn.disabled = isLoading;
-        btn.innerText = isLoading ? (customText || "⏳ Обробка ШІ...") : "🪄 Розподілити дані (Gemini AI)";
+        btn.innerText = isLoading ? (customText || "⏳ Обробка ШІ...") : "✨ Розподілити дані (Gemini AI)";
     }
 }

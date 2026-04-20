@@ -7,7 +7,8 @@
         h3 { margin-top: 0; font-size: 16px; color: #1976d2; }
         .input-group { margin-bottom: 15px; }
         label { display: block; margin-bottom: 5px; font-size: 12px; }
-        input { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        input, textarea { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; font-family: inherit; }
+        textarea { resize: vertical; }
         button { 
             background: #1976d2; color: white; border: none; padding: 10px 15px; 
             border-radius: 4px; cursor: pointer; width: 100%; 
@@ -22,6 +23,11 @@
     <div class="input-group">
         <label for="apiKey">Gemini API Key:</label>
         <input type="password" id="apiKey" placeholder="Вставте ключ сюди...">
+    </div>
+    <div class="input-group">
+        <label for="aiPrompt">Інструкції для ШІ (Промпт):</label>
+        <textarea id="aiPrompt" rows="10" placeholder="Введіть свої правила обробки даних тут..."></textarea>
+        <small style="font-size: 9px; color: #888;">Вихідний формат (JSON) додається автоматично.</small>
     </div>
     <button id="saveBtn">Зберегти налаштування</button>
     <div class="footer">
