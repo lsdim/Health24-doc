@@ -111,7 +111,7 @@ async function callGeminiAIWithFallback(apiKey, rawData) {
 }
 
 
-
+/*
 const DEFAULT_PROMPT_INSTRUCTIONS = `СУВОРА ІНСТРУКЦІЯ ДЛЯ МЕДИЧНОГО АНАЛІТИКА:
 Ти повинен перетворити список медичних результатів у структурований JSON. 
 КОЖЕН РЯДОК у вхідних даних починається з дати.
@@ -133,7 +133,7 @@ const DEFAULT_PROMPT_INSTRUCTIONS = `СУВОРА ІНСТРУКЦІЯ ДЛЯ М
 3. ОЧИЩЕННЯ ДАНИХ:
    - Не пропускай жодного значення, всі значення мають бути оброблені.
    - НЕ додавай від себе жодних коментарів чи нових значень. Тільки те, що є в тексті.`;
-
+*/
 async function callGeminiAI(apiKey, rawData, modelName) {
     // Отримуємо кастомний промпт від користувача
     const storage = await chrome.storage.local.get('custom_prompt');
