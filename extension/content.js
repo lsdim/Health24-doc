@@ -40,6 +40,8 @@ function addHelperButton() {
             };
             
             wrapper.appendChild(btn);
+			
+			showPostProcessingControls(table, wrapper) //temp
             
             const controls = container.querySelector('.table-controls') || table;
             controls.parentNode.insertBefore(wrapper, controls);
@@ -120,23 +122,27 @@ function showPostProcessingControls(table, wrapper) {
 }
 
 function swapTableColumns(table) {
-    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    const rows = Array.from(table.querySelectorAll('tbody tr')).slice(2); // Беремо тільки рядки з даними
     
-    for (let i = 2; i < rows.length; i++) {
-        const row = rows[i];
-		console.log('row.cells', row.cells);
-        if (row.cells.length >= 3) {
-            // Міняємо тільки ТЕКСТ всередині параграфів
-            const p2 = row.cells[1].querySelector('.cell-content p');
-            const p3 = row.cells[2].querySelector('.cell-content p');
-            
-            if (p2 && p3) {
-                const text2 = '22'; //p2.innerText;
-                const text3 = '33'; //p3.innerText;
-                p2.innerText = text3;
-                p3.innerText = text2;
-            }
-        }
+    // 1. Збираємо поточні дані з таблиці
+    const currentData = rows.map(row => {
+        if (row.cells.length < 3) return null;
+        
+        const p1 = row.cells[0].querySelector('.cell-content p');
+        const p2 = row.cells[1].querySelector('.cell-content p');
+        const p3 = row.cells[2].querySelector('.cell-content p');
+        
+        return {
+            instrument: p1 ? p1.innerText : '',
+            initial: p3 ? p3.innerText : '', // Міняємо місцями відразу при читанні
+            final: p2 ? p2.innerText : ''    // Міняємо місцями відразу при читанні
+        };
+    }).filter(item => item !== null);
+
+    // 2. Перестворюємо таблицю за допомогою вже існуючої функції
+    if (currentData.length > 0) {
+        updateTableWithResult(table, currentData);
+        console.log('✨ Таблицю повністю перестворено із заміною стовпців');
     }
 }
 
