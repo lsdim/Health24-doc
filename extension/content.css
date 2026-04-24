@@ -1,3 +1,11 @@
+.irp-helper-container {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
 .irp-helper-btn {
     background-color: #1976d2;
     color: white;
@@ -7,11 +15,16 @@
     cursor: pointer;
     font-size: 13px;
     font-weight: 500;
-    margin-bottom: 10px;
     transition: background-color 0.2s, box-shadow 0.2s;
     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
     display: inline-flex;
     align-items: center;
+}
+
+.irp-helper-btn.__secondary {
+    background-color: #f5f5f5;
+    color: #333;
+    border: 1px solid #ccc;
 }
 
 .irp-helper-btn:hover {
@@ -19,7 +32,61 @@
     box-shadow: 0 4px 8px rgba(0,0,0,0.3);
 }
 
+.irp-helper-btn.__secondary:hover {
+    background-color: #e0e0e0;
+}
+
 .irp-helper-btn:disabled {
     background-color: #ccc;
     cursor: wait;
+}
+
+.irp-warning-label {
+    font-size: 11px;
+    color: #d32f2f;
+    background: #ffebee;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid #ffcdd2;
+}
+
+/* Панель перегляду вихідних даних */
+.irp-raw-data-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    border: 1px solid #ccc;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+    z-index: 10000;
+    padding: 20px;
+    max-width: 80%;
+    max-height: 80%;
+    overflow-y: auto;
+    border-radius: 8px;
+}
+
+.irp-raw-data-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 10px;
+}
+
+.irp-raw-data-content {
+    font-family: monospace;
+    white-space: pre-wrap;
+    font-size: 12px;
+    background: #f9f9f9;
+    padding: 10px;
+    border-radius: 4px;
+}
+
+.irp-overlay-bg {
+    position: fixed;
+    top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.3);
+    z-index: 9999;
 }

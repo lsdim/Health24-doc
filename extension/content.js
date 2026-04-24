@@ -11,6 +11,8 @@ const observer = new MutationObserver(() => {
 
 observer.observe(document.body, { childList: true, subtree: true });
 
+let lastRawData = [];
+
 function addHelperButton() {
     const tableContainers = document.querySelectorAll('h24-editor-table:not(.irp-processed)');
     
@@ -22,6 +24,10 @@ function addHelperButton() {
 
         const headerText = table.innerText;
         if (TARGET_HEADERS.every(h => headerText.includes(h))) {
+            // Створюємо контейнер для кнопок
+            const wrapper = document.createElement('div');
+            wrapper.className = 'irp-helper-container';
+            
             const btn = document.createElement('button');
             btn.innerText = "✨ Розподілити дані (Gemini AI)";
             btn.className = "irp-helper-btn";
@@ -30,16 +36,18 @@ function addHelperButton() {
             btn.onclick = (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                processTable(table);
+                processTable(table, wrapper);
             };
             
+            wrapper.appendChild(btn);
+            
             const controls = container.querySelector('.table-controls') || table;
-            controls.parentNode.insertBefore(btn, controls);
+            controls.parentNode.insertBefore(wrapper, controls);
         }
     });
 }
 
-async function processTable(table) {
+async function processTable(table, wrapper) {
     const apiKey = (await chrome.storage.local.get('gemini_api_key')).gemini_api_key;
     if (!apiKey) {
         alert("Будь ласка, встановіть API ключ у налаштуваннях розширення!");
@@ -64,29 +72,112 @@ async function processTable(table) {
         return;
     }
 
-    setLoading(true);
+    lastRawData = dataToProcess; // Зберігаємо для перегляду
+    setLoading(true, null, wrapper);
 
     try {
-        //console.log('Дані для ШІ:', dataToProcess);
-        const result = await callGeminiAIWithFallback(apiKey, dataToProcess);
+        const result = await callGeminiAIWithFallback(apiKey, dataToProcess, wrapper);
         updateTableWithResult(table, result);
+        showPostProcessingControls(table, wrapper);
     } catch (e) {
         console.error(e);
         alert("Помилка AI: " + e.message);
     } finally {
-        setLoading(false);
+        setLoading(false, null, wrapper);
     }
 }
 
-async function callGeminiAIWithFallback(apiKey, rawData) {
-    // Актуальний список моделей на основі ваших тестів (v1beta)
+function showPostProcessingControls(table, wrapper) {
+    // Видаляємо старі додаткові кнопки, якщо вони були
+    wrapper.querySelectorAll('.__extra-ctrl').forEach(el => el.remove());
+
+    // Кнопка Swap
+    const swapBtn = document.createElement('button');
+    swapBtn.innerHTML = "🔄 Поміняти стовпці місцями";
+    swapBtn.className = "irp-helper-btn __secondary __extra-ctrl";
+    swapBtn.onclick = (e) => {
+        e.preventDefault();
+        swapTableColumns(table);
+    };
+
+    // Кнопка Review
+    const reviewBtn = document.createElement('button');
+    reviewBtn.innerHTML = "📋 Оригінальні дані";
+    reviewBtn.className = "irp-helper-btn __secondary __extra-ctrl";
+    reviewBtn.onclick = (e) => {
+        e.preventDefault();
+        showRawDataOverlay();
+    };
+
+    // Попередження
+    const warning = document.createElement('span');
+    warning.className = "irp-warning-label __extra-ctrl";
+    warning.innerText = "⚠️ Перевірте дати!";
+
+    wrapper.appendChild(swapBtn);
+    wrapper.appendChild(reviewBtn);
+    wrapper.appendChild(warning);
+}
+
+function swapTableColumns(table) {
+    const rows = Array.from(table.querySelectorAll('tbody tr'));
+    
+    for (let i = 2; i < rows.length; i++) {
+        const row = rows[i];
+		console.log('row.cells', row.cells);
+        if (row.cells.length >= 3) {
+            // Міняємо тільки ТЕКСТ всередині параграфів
+            const p2 = row.cells[1].querySelector('.cell-content p');
+            const p3 = row.cells[2].querySelector('.cell-content p');
+            
+            if (p2 && p3) {
+                const text2 = '22'; //p2.innerText;
+                const text3 = '33'; //p3.innerText;
+                p2.innerText = text3;
+                p3.innerText = text2;
+            }
+        }
+    }
+}
+
+function showRawDataOverlay() {
+    const overlay = document.createElement('div');
+    overlay.className = 'irp-overlay-bg';
+    
+    const panel = document.createElement('div');
+    panel.className = 'irp-raw-data-panel';
+    
+    const cleanDisplayData = lastRawData.join('\n');
+	/*
+    const cleanDisplayData = lastRawData
+        .filter(line => !line.includes('*******************************'))
+        .map(line => `• ${line}`)
+        .join('\n');
+    */
+    panel.innerHTML = `
+        <div class="irp-raw-data-header">
+            <strong style="color: #1976d2">📋 Оригінальні дані (для перевірки)</strong>
+            <button style="border: none; background: #eee; padding: 5px 10px; border-radius: 4px; cursor: pointer;" onclick="this.closest('.irp-overlay-bg').remove()">✖ Закрити</button>
+        </div>
+        <div class="irp-raw-data-content" style="max-height: 400px; overflow-y: auto; background: #f9f9f9; border: 1px solid #ddd; padding: 15px;">${cleanDisplayData}</div>
+    `;
+    
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    
+    overlay.onclick = (e) => {
+        if (e.target === overlay) overlay.remove();
+    };
+}
+
+async function callGeminiAIWithFallback(apiKey, rawData, wrapper) {
     const models = [
         'gemini-2.5-flash-lite', 
         'gemini-2.5-flash', 
         'gemini-flash-latest',
         'gemma-4-31b-it',
         'gemma-3-27b-it',
-        'gemini-2.0-flash-lite', // fallback на випадок оновлення лімітів
+        'gemini-2.0-flash-lite',
         'gemini-2.0-flash'
     ];
     let lastError = null;
@@ -94,7 +185,7 @@ async function callGeminiAIWithFallback(apiKey, rawData) {
     for (const model of models) {
         try {
             console.log(`🚀 Спроба запиту до моделі: ${model}`);
-            setLoading(true, `⏳ Обробка (${model})...`);
+            setLoading(true, `⏳ Обробка (${model})...`, wrapper);
             return await callGeminiAI(apiKey, rawData, model);
         } catch (e) {
             lastError = e;
@@ -111,8 +202,8 @@ async function callGeminiAIWithFallback(apiKey, rawData) {
 }
 
 
-/*
-const DEFAULT_PROMPT_INSTRUCTIONS = `СУВОРА ІНСТРУКЦІЯ ДЛЯ МЕДИЧНОГО АНАЛІТИКА:
+
+/*const DEFAULT_PROMPT_INSTRUCTIONS = `СУВОРА ІНСТРУКЦІЯ ДЛЯ МЕДИЧНОГО АНАЛІТИКА:
 Ти повинен перетворити список медичних результатів у структурований JSON. 
 КОЖЕН РЯДОК у вхідних даних починається з дати.
 
@@ -132,8 +223,8 @@ const DEFAULT_PROMPT_INSTRUCTIONS = `СУВОРА ІНСТРУКЦІЯ ДЛЯ М
 
 3. ОЧИЩЕННЯ ДАНИХ:
    - Не пропускай жодного значення, всі значення мають бути оброблені.
-   - НЕ додавай від себе жодних коментарів чи нових значень. Тільки те, що є в тексті.`;
-*/
+   - НЕ додавай від себе жодних коментарів чи нових значень. Тільки те, що є в тексті.`;*/
+
 async function callGeminiAI(apiKey, rawData, modelName) {
     // Отримуємо кастомний промпт від користувача
     const storage = await chrome.storage.local.get('custom_prompt');
@@ -195,18 +286,8 @@ function updateTableWithResult(table, aiResult) {
     aiResult.forEach(item => {
         const tr = document.createElement('tr');
         tr.setAttribute('data-entity-id', 'ai-' + Math.random().toString(36).substr(2, 9));
-        
-        tr.innerHTML = `
-            <td colspan="1" rowspan="1" colwidth="null" data-text-orientation="system_variables.diagnostic_report" style="position: relative;">
-                <div class="cell-content"><p>${item.instrument}</p></div>
-            </td>
-            <td colspan="1" rowspan="1" colwidth="null" data-text-orientation="system_variables.diagnostic_report" style="position: relative;">
-                <div class="cell-content"><p>${item.initial || ""}</p></div>
-            </td>
-            <td colspan="1" rowspan="1" colwidth="null" data-text-orientation="system_variables.diagnostic_report" style="position: relative;">
-                <div class="cell-content"><p>${item.final || ""}</p></div>
-            </td>
-        `;
+        // Формуємо HTML без зайвих пробілів
+        tr.innerHTML = `<td colspan="1" rowspan="1" data-text-orientation="system_variables.diagnostic_report" style="position: relative;"><div class="cell-content"><p>${item.instrument}</p></div></td><td colspan="1" rowspan="1" data-text-orientation="system_variables.diagnostic_report" style="position: relative;"><div class="cell-content"><p>${item.initial || ""}</p></div></td><td colspan="1" rowspan="1" data-text-orientation="system_variables.diagnostic_report" style="position: relative;"><div class="cell-content"><p>${item.final || ""}</p></div></td>`;
         tbody.appendChild(tr);
     });
 }
