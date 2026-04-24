@@ -39,9 +39,7 @@ function addHelperButton() {
                 processTable(table, wrapper);
             };
             
-            wrapper.appendChild(btn);
-			
-			showPostProcessingControls(table, wrapper) //temp
+            wrapper.appendChild(btn);			
             
             const controls = container.querySelector('.table-controls') || table;
             controls.parentNode.insertBefore(wrapper, controls);
