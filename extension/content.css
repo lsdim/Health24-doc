@@ -84,9 +84,44 @@
     border-radius: 4px;
 }
 
-.irp-overlay-bg {
-    position: fixed;
-    top: 0; left: 0; width: 100%; height: 100%;
-    background: rgba(0,0,0,0.3);
-    z-index: 9999;
+/* Анімація для нових рядків */
+@keyframes irp-row-flash {
+    0% { background-color: rgba(25, 118, 210, 0.2); }
+    100% { background-color: transparent; }
 }
+
+.irp-row-updated {
+    animation: irp-row-flash 1.5s ease-out;
+}
+
+/* Toast сповіщення */
+.irp-toast {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    background: #323232;
+    color: white;
+    padding: 12px 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 10001;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 14px;
+    transform: translateY(100px);
+    opacity: 0;
+    transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+.irp-toast.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.irp-toast-icon {
+    font-size: 18px;
+}
+
+.irp-toast.__success { border-left: 4px solid #4caf50; }
+.irp-toast.__info { border-left: 4px solid #2196f3; }

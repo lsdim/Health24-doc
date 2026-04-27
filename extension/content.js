@@ -79,6 +79,7 @@ async function processTable(table, wrapper) {
         const result = await callGeminiAIWithFallback(apiKey, dataToProcess, wrapper);
         updateTableWithResult(table, result);
         showPostProcessingControls(table, wrapper);
+		showToast("✨ Дані успішно оброблені ШІ", "success");
     } catch (e) {
         console.error(e);
         alert("Помилка AI: " + e.message);
@@ -140,14 +141,52 @@ function swapTableColumns(table) {
     // 2. Перестворюємо таблицю за допомогою вже існуючої функції
     if (currentData.length > 0) {
         updateTableWithResult(table, currentData);
+		showToast("🔄 Стовпці поміняно місцями", "info");
         console.log('✨ Таблицю повністю перестворено із заміною стовпців');
     }
+}
+
+function showToast(message, type = "success") {
+    // Видаляємо старий тост, якщо є
+    const oldToast = document.querySelector('.irp-toast');
+    if (oldToast) oldToast.remove();
+
+    const toast = document.createElement('div');
+    toast.className = `irp-toast __${type}`;
+    
+    const icon = type === "success" ? "✅" : "ℹ️";
+    toast.innerHTML = `<span class="irp-toast-icon">${icon}</span> <span>${message}</span>`;
+    
+    document.body.appendChild(toast);
+    
+    // Анімація появи
+    setTimeout(() => toast.classList.add('show'), 100);
+    
+    // Видалення через 3 секунди
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+function updateTableWithResult(table, aiResult) {
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    for (let i = rows.length - 1; i > 1; i--) { rows[i].remove(); }
+
+    aiResult.forEach(item => {
+        const tr = document.createElement('tr');
+        tr.className = 'irp-row-updated'; // Додаємо клас для анімації
+        tr.setAttribute('data-entity-id', 'ai-' + Math.random().toString(36).substr(2, 9));
+        tr.innerHTML = `<td colspan="1" rowspan="1" data-text-orientation="system_variables.diagnostic_report" style="position: relative;"><div class="cell-content"><p>${item.instrument}</p></div></td><td colspan="1" rowspan="1" data-text-orientation="system_variables.diagnostic_report" style="position: relative;"><div class="cell-content"><p>${item.initial || ""}</p></div></td><td colspan="1" rowspan="1" data-text-orientation="system_variables.diagnostic_report" style="position: relative;"><div class="cell-content"><p>${item.final || ""}</p></div></td>`;
+        tbody.appendChild(tr);
+    });
 }
 
 function showRawDataOverlay() {
     const overlay = document.createElement('div');
     overlay.className = 'irp-overlay-bg';
-    
+    overlay.style.cssText = "position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.3); z-index: 9999;";
     const panel = document.createElement('div');
     panel.className = 'irp-raw-data-panel';
     
@@ -276,7 +315,7 @@ ${rawData.join('\n')}`;
         throw new Error("Некоректний формат відповіді ШІ.");
     }
 }
-
+/*
 function updateTableWithResult(table, aiResult) {
     const tbody = table.querySelector('tbody');
     const rows = Array.from(tbody.querySelectorAll('tr'));
@@ -295,9 +334,10 @@ function updateTableWithResult(table, aiResult) {
         tbody.appendChild(tr);
     });
 }
-
-function setLoading(isLoading, customText) {
-    const btn = document.querySelector('.irp-helper-btn');
+*/
+function setLoading(isLoading, customText, wrapper) {
+    //const btn = document.querySelector('.irp-helper-btn');
+	const btn = wrapper.querySelector('.irp-helper-btn');
     if (btn) {
         btn.disabled = isLoading;
         btn.innerText = isLoading ? (customText || "⏳ Обробка ШІ...") : "✨ Розподілити дані (Gemini AI)";
