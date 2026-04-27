@@ -204,6 +204,77 @@ function comparePreparedBlocks(a, b) {
     return 0;
 }
 
+function validateAndNormalizeAIResult(parsedResult) {
+    if (!Array.isArray(parsedResult)) {
+        throw new Error("ШІ повернув не масив.");
+    }
+
+    const normalizedResult = parsedResult
+        .map(normalizeAIResultItem)
+        .filter(item => item.instrument);
+
+    if (normalizedResult.length === 0) {
+        throw new Error("ШІ повернув порожній або некоректний результат.");
+    }
+
+    return normalizedResult;
+}
+
+function normalizeAIResultItem(item) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        throw new Error("Елемент відповіді ШІ має некоректний формат.");
+    }
+
+    const allowedKeys = ['instrument', 'initial', 'final'];
+    const unknownKeys = Object.keys(item).filter(key => !allowedKeys.includes(key));
+    if (unknownKeys.length > 0) {
+        console.warn('AI result contains extra keys:', unknownKeys);
+    }
+
+    return {
+        instrument: normalizeAIField(item.instrument, 'instrument', true),
+        initial: normalizeAIField(item.initial, 'initial'),
+        final: normalizeAIField(item.final, 'final')
+    };
+}
+
+function normalizeAIField(value, fieldName, required = false) {
+    if (value === null || value === undefined) {
+        if (required) {
+            throw new Error(`У відповіді ШІ відсутнє поле ${fieldName}.`);
+        }
+        return '';
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        value = String(value);
+    }
+
+    if (typeof value !== 'string') {
+        throw new Error(`Поле ${fieldName} має некоректний тип.`);
+    }
+
+    const normalizedValue = value
+        .replace(/\u00a0/g, ' ')
+        .replace(/[ \t]+/g, ' ')
+        .trim();
+
+    if (required && !normalizedValue) {
+        throw new Error(`Поле ${fieldName} порожнє.`);
+    }
+
+    return normalizedValue;
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function showPostProcessingControls(table, wrapper) {
     // Видаляємо старі додаткові кнопки, якщо вони були
     wrapper.querySelectorAll('.__extra-ctrl').forEach(el => el.remove());
@@ -291,10 +362,13 @@ function updateTableWithResult(table, aiResult) {
     for (let i = rows.length - 1; i > 1; i--) { rows[i].remove(); }
 
     aiResult.forEach(item => {
+        const instrument = escapeHtml(item.instrument || "");
+        const initial = escapeHtml(item.initial || "");
+        const final = escapeHtml(item.final || "");
         const tr = document.createElement('tr');
         tr.className = 'irp-row-updated'; // Додаємо клас для анімації
         tr.setAttribute('data-entity-id', 'ai-' + Math.random().toString(36).substr(2, 9));
-        tr.innerHTML = `<td colspan="1" rowspan="1" data-text-orientation="system_variables.diagnostic_report" style="position: relative;"><div class="cell-content"><p>${item.instrument}</p></div></td><td colspan="1" rowspan="1" data-text-orientation="system_variables.diagnostic_report" style="position: relative;"><div class="cell-content"><p>${item.initial || ""}</p></div></td><td colspan="1" rowspan="1" data-text-orientation="system_variables.diagnostic_report" style="position: relative;"><div class="cell-content"><p>${item.final || ""}</p></div></td>`;
+        tr.innerHTML = `<td colspan="1" rowspan="1" data-text-orientation="system_variables.diagnostic_report" style="position: relative;"><div class="cell-content"><p>${instrument}</p></div></td><td colspan="1" rowspan="1" data-text-orientation="system_variables.diagnostic_report" style="position: relative;"><div class="cell-content"><p>${initial}</p></div></td><td colspan="1" rowspan="1" data-text-orientation="system_variables.diagnostic_report" style="position: relative;"><div class="cell-content"><p>${final}</p></div></td>`;
         tbody.appendChild(tr);
     });
 }
@@ -426,7 +500,7 @@ ${rawData.join('\n')}`;
 
     try {
         const content = json.candidates[0].content.parts[0].text;
-        return JSON.parse(content);
+        return validateAndNormalizeAIResult(JSON.parse(content));
     } catch (e) {
         throw new Error("Некоректний формат відповіді ШІ.");
     }
