@@ -12,6 +12,7 @@ const observer = new MutationObserver(() => {
 observer.observe(document.body, { childList: true, subtree: true });
 
 let lastRawData = [];
+const ENTRY_SEPARATOR = '*******************************';
 
 function addHelperButton() {
     const tableContainers = document.querySelectorAll('h24-editor-table:not(.irp-processed)');
@@ -64,7 +65,7 @@ async function processTable(table, wrapper) {
         // Перевіряємо, чи це сирі дані (містять дату або роздільники)
         if (text && text.length > 5 && (/\d{2}\.\d{2}\.\d{4}/.test(text) || text.includes('***'))) { 
             freshlyScrapedData.push(text);
-			freshlyScrapedData.push('*******************************');
+			freshlyScrapedData.push(ENTRY_SEPARATOR);
         }
     }
 
@@ -72,10 +73,10 @@ async function processTable(table, wrapper) {
     if (freshlyScrapedData.length > 0) {
         // Якщо знайшли нові дані в таблиці - використовуємо їх і оновлюємо кеш
         lastRawData = freshlyScrapedData;
-        dataToUse = freshlyScrapedData;
+        dataToUse = prepareRawDataForAI(freshlyScrapedData);
     } else if (lastRawData.length > 0) {
         // Якщо в таблиці порожньо/оброблено, використовуємо кеш для повторної спроби
-        dataToUse = lastRawData;
+        dataToUse = prepareRawDataForAI(lastRawData);
         console.log('🔄 Використовуємо дані з кешу lastRawData');
     } else {
         alert("Дані для обробки не знайдені.");
@@ -100,6 +101,107 @@ async function processTable(table, wrapper) {
     } finally {
         setLoading(false, null, wrapper);
     }
+}
+
+function prepareRawDataForAI(rawData) {
+    const blocks = splitRawDataIntoBlocks(rawData);
+    if (blocks.length === 0) return [];
+
+    const preparedBlocks = blocks
+        .map(prepareBlockForAI)
+        .filter(block => block && block.lines.length > 0)
+        .sort(comparePreparedBlocks);
+
+    const preparedData = [];
+
+    preparedBlocks.forEach((block, index) => {
+        preparedData.push(block.lines.join('\n'));
+        if (index < preparedBlocks.length - 1) {
+            preparedData.push(ENTRY_SEPARATOR);
+        }
+    });
+
+    return preparedData;
+}
+
+function splitRawDataIntoBlocks(rawData) {
+    const blocks = [];
+    let currentBlock = [];
+
+    rawData.forEach(item => {
+        if (item === ENTRY_SEPARATOR) {
+            if (currentBlock.length > 0) {
+                blocks.push(currentBlock.join('\n'));
+                currentBlock = [];
+            }
+            return;
+        }
+
+        if (typeof item === 'string' && item.trim()) {
+            currentBlock.push(item.trim());
+        }
+    });
+
+    if (currentBlock.length > 0) {
+        blocks.push(currentBlock.join('\n'));
+    }
+
+    return blocks;
+}
+
+function prepareBlockForAI(blockText) {
+    const lines = blockText
+        .replace(/\r/g, '')
+        .split('\n')
+        .map(sanitizeRawLine)
+        .filter(Boolean);
+
+    if (lines.length === 0) return null;
+
+    const dateIndex = lines.findIndex(line => /^\d{2}\.\d{2}\.\d{4}$/.test(line));
+    if (dateIndex > 0) {
+        const [dateLine] = lines.splice(dateIndex, 1);
+        lines.unshift(dateLine);
+    }
+
+    return {
+        date: parseBlockDate(lines[0] || ''),
+        lines
+    };
+}
+
+function sanitizeRawLine(line) {
+    const normalizedLine = line
+        .replace(/\u00a0/g, ' ')
+        .replace(/[ \t]+/g, ' ')
+        .trim();
+
+    if (!normalizedLine) return '';
+
+    const lowerLine = normalizedLine.toLowerCase();
+    if (lowerLine === 'clear' || lowerLine === 'text_fields') {
+        return '';
+    }
+
+    return normalizedLine.replace(/^[?]+/, '').trim();
+}
+
+function parseBlockDate(line) {
+    const match = line.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (!match) return null;
+
+    const [, day, month, year] = match;
+    return Number(`${year}${month}${day}`);
+}
+
+function comparePreparedBlocks(a, b) {
+    if (a.date !== null && b.date !== null) {
+        return a.date - b.date;
+    }
+
+    if (a.date !== null) return -1;
+    if (b.date !== null) return 1;
+    return 0;
 }
 
 function showPostProcessingControls(table, wrapper) {
