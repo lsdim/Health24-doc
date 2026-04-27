@@ -55,30 +55,44 @@ async function processTable(table, wrapper) {
     }
 
     const rows = Array.from(table.querySelectorAll('tbody tr'));
-    const dataToProcess = [];
+    const freshlyScrapedData = [];
 
     // ПРОПУСКАЄМО перші 2 рядки (заголовок)
     for (let i = 2; i < rows.length; i++) {
         const firstCell = rows[i].cells[0];
         const text = firstCell ? firstCell.innerText.trim() : "";
-        if (text && text.length > 5) { 
-            dataToProcess.push(text);
-			dataToProcess.push('*******************************');
+        // Перевіряємо, чи це сирі дані (містять дату або роздільники)
+        if (text && text.length > 5 && (/\d{2}\.\d{2}\.\d{4}/.test(text) || text.includes('***'))) { 
+            freshlyScrapedData.push(text);
+			freshlyScrapedData.push('*******************************');
         }
     }
 
-    if (dataToProcess.length === 0) {
-        alert("Дані для обробки не знайдені (крім заголовка).");
+    let dataToUse;
+    if (freshlyScrapedData.length > 0) {
+        // Якщо знайшли нові дані в таблиці - використовуємо їх і оновлюємо кеш
+        lastRawData = freshlyScrapedData;
+        dataToUse = freshlyScrapedData;
+    } else if (lastRawData.length > 0) {
+        // Якщо в таблиці порожньо/оброблено, використовуємо кеш для повторної спроби
+        dataToUse = lastRawData;
+        console.log('🔄 Використовуємо дані з кешу lastRawData');
+    } else {
+        alert("Дані для обробки не знайдені.");
         return;
     }
 
-    lastRawData = dataToProcess; // Зберігаємо для перегляду
     setLoading(true, null, wrapper);
 
     try {
-        const result = await callGeminiAIWithFallback(apiKey, dataToProcess, wrapper);
+        const result = await callGeminiAIWithFallback(apiKey, dataToUse, wrapper);
         updateTableWithResult(table, result);
         showPostProcessingControls(table, wrapper);
+        
+        // Оновлюємо назву головної кнопки для повторного використання
+        const mainBtn = wrapper.querySelector('.irp-helper-btn:not(.__secondary)');
+        if (mainBtn) mainBtn.innerText = "🔄 Перерозподілити дані";
+        
 		showToast("✨ Дані успішно оброблені ШІ", "success");
     } catch (e) {
         console.error(e);
