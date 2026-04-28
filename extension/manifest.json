@@ -5,7 +5,17 @@
   "description": "Автоматичний розподіл даних діагностичних звітів в таблиці ІРП",
   "permissions": ["storage"],
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/h24-doc-16.png",
+      "48": "icons/h24-doc-48.png",
+      "128": "icons/h24-doc-128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/h24-doc-16.png",
+    "48": "icons/h24-doc-48.png",
+    "128": "icons/h24-doc-128.png"
   },
   "content_scripts": [
     {
