@@ -8,3 +8,6 @@ parser_test.js
 # Browser metadata
 .DS_Store
 Thumbs.db
+/*_files
+*.txt
+*.zip
