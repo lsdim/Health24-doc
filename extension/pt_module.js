@@ -63,15 +63,22 @@ function processPTTable(table) {
     // Допоміжна функція для очищення тексту від технічного сміття Health24
     const getCleanData = (cell) => {
         if (!cell) return "";
-        // Шукаємо спан із даними
-        const dataSpan = cell.querySelector('[data-variable]') || cell.querySelector('.variable-mark-highlight');
-        if (dataSpan) return dataSpan.innerText.trim();
+        
+        // Пріоритет: елементи де лежать чисті дані
+        const valEl = cell.querySelector('.name-input') || 
+                      cell.querySelector('[data-variable]') || 
+                      cell.querySelector('.variable-mark-highlight');
+        
+        let text = valEl ? valEl.innerText : cell.innerText;
 
-        // Fallback: чистимо innerText
-        return cell.innerText
-            .replace(/Код:|Дата:|text_fields|▲|▼/g, '')
-			.replace('\nclear\n', '')
-			.replace('\n', '')
+        // Витягуємо дату (ДД.ММ.РРРР), якщо вона там є
+        const dateMatch = text.match(/(\d{2}\.\d{2}\.\d{4})/);
+        if (dateMatch) return dateMatch[1];
+
+        // Для кодів та іншого: чистимо від відомих технічних слів
+        return text
+            .replace(/Код:|Дата:|Дата та час проведення:|text_fields|clear|▲|▼/g, '')
+            .replace(/\s+/g, ' ')
             .trim();
     };
 
@@ -79,16 +86,15 @@ function processPTTable(table) {
         if (row.cells.length < 2) return;
         const code = getCleanData(row.cells[0]);
         const date = getCleanData(row.cells[1]);
-		
-		console.log('code', `"${code}"`);
-		console.log('date', `"${date}"`);
-
+        
         if (code && date && /^\d{2}\.\d{2}\.\d{4}$/.test(date)) {
             if (!interventions[code]) interventions[code] = [];
             if (!interventions[code].includes(date)) interventions[code].push(date);
             allUniqueDates.add(date);
         }
     });
+	
+	console.log('interventions', interventions);
 
     const sortedDates = Array.from(allUniqueDates).sort((a, b) => {
         const parse = (d) => {
