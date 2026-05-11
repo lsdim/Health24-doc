@@ -52,7 +52,6 @@ function processPTTable(table) {
     if (allRows.length < 2) return;
 
     const dataRows = allRows.slice(2);
-	console.log('dataRows', dataRows);
     if (dataRows.length === 0) {
         if (typeof showToast === 'function') showToast("⚠️ Дані для групування не знайдені", "warning");
         return;
@@ -61,11 +60,29 @@ function processPTTable(table) {
     const interventions = {};
     const allUniqueDates = new Set();
 
+    // Допоміжна функція для очищення тексту від технічного сміття Health24
+    const getCleanData = (cell) => {
+        if (!cell) return "";
+        // Шукаємо спан із даними
+        const dataSpan = cell.querySelector('[data-variable]') || cell.querySelector('.variable-mark-highlight');
+        if (dataSpan) return dataSpan.innerText.trim();
+
+        // Fallback: чистимо innerText
+        return cell.innerText
+            .replace(/Код:|Дата:|text_fields|▲|▼/g, '')
+			.replace('\nclear\n', '')
+			.replace('\n', '')
+            .trim();
+    };
+
     dataRows.forEach(row => {
         if (row.cells.length < 2) return;
-        const code = row.cells[0].innerText.trim();
-        const date = row.cells[1].innerText.trim();
-        
+        const code = getCleanData(row.cells[0]);
+        const date = getCleanData(row.cells[1]);
+		
+		console.log('code', `"${code}"`);
+		console.log('date', `"${date}"`);
+
         if (code && date && /^\d{2}\.\d{2}\.\d{4}$/.test(date)) {
             if (!interventions[code]) interventions[code] = [];
             if (!interventions[code].includes(date)) interventions[code].push(date);
@@ -86,9 +103,6 @@ function processPTTable(table) {
         const rowValues = sortedDates.map(d => procDates.includes(d) ? d : "");
         return { code, dates: rowValues };
     });
-	
-	console.log('groupedData', groupedData);
-	console.log('sortedDates', sortedDates);
 
     rebuildPTTable(table, groupedData, sortedDates);
 }
