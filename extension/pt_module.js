@@ -1,4 +1,3 @@
-
 // Оптимізований пошук: шукаємо ключові слова в першій клітинці
 const PT_KEYWORDS = ["Реабілітаційні", "втручання", "026:2021"];
 
@@ -13,7 +12,6 @@ function isPTTable(table) {
     const firstCell = table.querySelector('td, th');
     if (!firstCell) return false;
     const text = firstCell.innerText;
-    // Перевіряємо, чи є хоча б два ключових слова в першій клітинці
     return PT_KEYWORDS.filter(kw => text.includes(kw)).length >= 2;
 }
 
@@ -24,7 +22,6 @@ function addPTGroupButton() {
         if (!table) return;
 
         if (isPTTable(table)) {
-            // Перевіряємо наявність кнопки у всьому контейнері, щоб уникнути дублікатів
             if (!container.querySelector('.pt-group-btn')) {
                 const btn = document.createElement('button');
                 btn.innerText = "✨ Групувати втручання";
@@ -60,22 +57,14 @@ function processPTTable(table) {
     const interventions = {};
     const allUniqueDates = new Set();
 
-    // Допоміжна функція для очищення тексту від технічного сміття Health24
     const getCleanData = (cell) => {
         if (!cell) return "";
-        
-        // Пріоритет: елементи де лежать чисті дані
         const valEl = cell.querySelector('.name-input') || 
                       cell.querySelector('[data-variable]') || 
                       cell.querySelector('.variable-mark-highlight');
-        
         let text = valEl ? valEl.innerText : cell.innerText;
-
-        // Витягуємо дату (ДД.ММ.РРРР), якщо вона там є
         const dateMatch = text.match(/(\d{2}\.\d{2}\.\d{4})/);
         if (dateMatch) return dateMatch[1];
-
-        // Для кодів та іншого: чистимо від відомих технічних слів
         return text
             .replace(/Код:|Дата:|Дата та час проведення:|text_fields|clear|▲|▼/g, '')
             .replace(/\s+/g, ' ')
@@ -86,15 +75,12 @@ function processPTTable(table) {
         if (row.cells.length < 2) return;
         const code = getCleanData(row.cells[0]);
         const date = getCleanData(row.cells[1]);
-        
         if (code && date && /^\d{2}\.\d{2}\.\d{4}$/.test(date)) {
             if (!interventions[code]) interventions[code] = [];
             if (!interventions[code].includes(date)) interventions[code].push(date);
             allUniqueDates.add(date);
         }
     });
-	
-	console.log('interventions', interventions);
 
     const sortedDates = Array.from(allUniqueDates).sort((a, b) => {
         const parse = (d) => {
@@ -115,45 +101,49 @@ function processPTTable(table) {
 
 function rebuildPTTable(table, groupedData, sortedDates) {
     const tbody = table.querySelector('tbody');
-    const rows = Array.from(tbody.querySelectorAll('tr'));
+    tbody.innerHTML = ''; // Повне очищення для перемальовування
+
+    // 1. Створюємо перший рядок шапки
+    const tr0 = document.createElement('tr');
+    tr0.setAttribute('data-row-type', 'template-header');
     
-    // 1. Оновлюємо шапку (другий рядок шапки)
-    // Перший рядок шапки має "Дата" з colspan. Ми маємо його оновити.
-    const headerRow1 = rows[0];
-    const headerRow2 = rows[1];
+    // Колонку "Втручання" (rowspan 2)
+    const th0 = document.createElement('th');
+    th0.setAttribute('colspan', '1');
+    th0.setAttribute('rowspan', '2');
+    th0.setAttribute('colwidth', '194');
+    th0.innerHTML = '<p style="text-align: left;"><span style="font-size: 11pt;">Реабілітаційні втручання</span><br><span style="font-size: 11pt;">(національний класифікатор 026:2021)</span></p>';
+    
+    // Колонку "Дата" (colspan на всі дати)
+    const th1 = document.createElement('th');
+    th1.setAttribute('colspan', sortedDates.length);
+    th1.setAttribute('rowspan', '1');
+    th1.innerHTML = '<p style="text-align: center;"><span style="font-size: 11pt;">Дата</span></p>';
+    
+    tr0.appendChild(th0);
+    tr0.appendChild(th1);
+    tbody.appendChild(tr0);
 
-    if (headerRow1 && headerRow1.cells.length >= 2) {
-        // Оновлюємо colspan для заголовка "Дата" (це друга клітинка в першому рядку)
-        headerRow1.cells[1].setAttribute('colspan', sortedDates.length);
-    }
+    // 2. Створюємо другий рядок шапки ("день, місяць, рік")
+    const tr1 = document.createElement('tr');
+    sortedDates.forEach(() => {
+        const td = document.createElement('td');
+        td.setAttribute('colspan', '1');
+        td.setAttribute('rowspan', '1');
+        td.innerHTML = '<div class="cell-content"><p style="text-align: center;"><span style="font-size: 10pt;">день, місяць, рік</span></p></div>';
+        tr1.appendChild(td);
+    });
+    tbody.appendChild(tr1);
 
-    if (headerRow2) {
-        // Очищуємо всі клітинки в другому рядку шапки, крім тих, що відносяться до першої колонки (якщо вони там є)
-        // В цій таблиці перша колонка займає 2 рядки (rowspan=2), тому в другому рядку її немає.
-        headerRow2.innerHTML = '';
-        sortedDates.forEach(() => {
-            const td = document.createElement('td');
-            td.setAttribute('colspan', '1');
-            td.setAttribute('rowspan', '1');
-            td.innerHTML = '<div class="cell-content"><p style="text-align: center;"><span style="font-size: 10pt;">день, місяць, рік</span></p></div>';
-            headerRow2.appendChild(td);
-        });
-    }
-
-    // 2. Видаляємо старі дані
-    for (let i = rows.length - 1; i > 1; i--) {
-        rows[i].remove();
-    }
-
-    // 3. Додаємо нові згруповані дані
+    // 3. Додаємо згруповані дані
     groupedData.forEach(item => {
         const tr = document.createElement('tr');
         tr.className = 'ng-star-inserted';
         
-        // Код втручання
+        // Код
         let html = `<td colspan="1" rowspan="1" style="position: relative;"><div class="cell-content"><p>${item.code}</p></div></td>`;
         
-        // Дати по стовпцях
+        // Дати
         item.dates.forEach(date => {
             html += `<td colspan="1" rowspan="1" style="position: relative;"><div class="cell-content"><p style="text-align: center;">${date}</p></div></td>`;
         });
