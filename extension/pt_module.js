@@ -90,31 +90,35 @@ function processPTTable(table) {
         return parse(a) - parse(b);
     });
 
-    const groupedData = Object.keys(interventions).map(code => {
+    // Формуємо дані для рядків та визначаємо "черговість" за першою датою
+    let groupedData = Object.keys(interventions).map(code => {
         const procDates = interventions[code];
         const rowValues = sortedDates.map(d => procDates.includes(d) ? d : "");
-        return { code, dates: rowValues };
+        // Індекс першого входу дати (чим менший індекс, тим раніше почалася процедура)
+        const firstDateIndex = rowValues.findIndex(d => d !== "");
+        return { code, dates: rowValues, firstDateIndex };
     });
+
+    // Сортуємо РЯДКИ: процедури, що почалися раніше — вище
+    groupedData.sort((a, b) => a.firstDateIndex - b.firstDateIndex);
 
     rebuildPTTable(table, groupedData, sortedDates);
 }
 
 function rebuildPTTable(table, groupedData, sortedDates) {
     const tbody = table.querySelector('tbody');
-    tbody.innerHTML = ''; // Повне очищення для перемальовування
+    tbody.innerHTML = ''; 
 
-    // 1. Створюємо перший рядок шапки
+    // 1. Перший рядок шапки
     const tr0 = document.createElement('tr');
     tr0.setAttribute('data-row-type', 'template-header');
     
-    // Колонку "Втручання" (rowspan 2)
     const th0 = document.createElement('th');
     th0.setAttribute('colspan', '1');
     th0.setAttribute('rowspan', '2');
     th0.setAttribute('colwidth', '194');
     th0.innerHTML = '<p style="text-align: left;"><span style="font-size: 11pt;">Реабілітаційні втручання</span><br><span style="font-size: 11pt;">(національний класифікатор 026:2021)</span></p>';
     
-    // Колонку "Дата" (colspan на всі дати)
     const th1 = document.createElement('th');
     th1.setAttribute('colspan', sortedDates.length);
     th1.setAttribute('rowspan', '1');
@@ -124,7 +128,7 @@ function rebuildPTTable(table, groupedData, sortedDates) {
     tr0.appendChild(th1);
     tbody.appendChild(tr0);
 
-    // 2. Створюємо другий рядок шапки ("день, місяць, рік")
+    // 2. Другий рядок шапки
     const tr1 = document.createElement('tr');
     sortedDates.forEach(() => {
         const td = document.createElement('td');
@@ -135,15 +139,13 @@ function rebuildPTTable(table, groupedData, sortedDates) {
     });
     tbody.appendChild(tr1);
 
-    // 3. Додаємо згруповані дані
+    // 3. Згруповані дані (вже відсортовані хронологічно по рядках)
     groupedData.forEach(item => {
         const tr = document.createElement('tr');
         tr.className = 'ng-star-inserted';
         
-        // Код
         let html = `<td colspan="1" rowspan="1" style="position: relative;"><div class="cell-content"><p>${item.code}</p></div></td>`;
         
-        // Дати
         item.dates.forEach(date => {
             html += `<td colspan="1" rowspan="1" style="position: relative;"><div class="cell-content"><p style="text-align: center;">${date}</p></div></td>`;
         });
@@ -152,5 +154,5 @@ function rebuildPTTable(table, groupedData, sortedDates) {
         tbody.appendChild(tr);
     });
 
-    if (typeof showToast === 'function') showToast("✅ Таблицю перебудовано", "success");
+    if (typeof showToast === 'function') showToast("Втручання згруповано хронологічно", "success");
 }
