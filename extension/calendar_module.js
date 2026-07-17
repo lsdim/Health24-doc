@@ -1,5 +1,12 @@
 // CONTEXT: This file is for the new Calendar view functionality.
 
+// --- UTILITY FUNCTIONS ---
+function formatDateToYMD(date) {
+    const pad = (num) => num.toString().padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+// --- OBSERVER & BUTTON INJECTION ---
 const calendarObserver = new MutationObserver(() => {
     addCalendarViewButton();
 });
@@ -28,6 +35,7 @@ function addCalendarViewButton() {
     }
 }
 
+// --- UI & RENDERING ---
 function showDateRangePicker() {
     const overlay = document.createElement('div');
     overlay.className = 'irp-overlay-bg';
@@ -47,7 +55,7 @@ function showDateRangePicker() {
     overlay.appendChild(panel);
     document.body.appendChild(overlay);
 
-    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    overlay.onclick = (e) => { if (e.target === overlay) e.currentTarget.remove(); };
     panel.querySelector('#calendar-apply').onclick = () => {
         const start = panel.querySelector('#calendar-start').value;
         const end = panel.querySelector('#calendar-end').value;
@@ -71,92 +79,38 @@ async function renderCustomCalendar(mode, start, end) {
         endDate = new Date(end);
     } else return;
 
-    try {
-        if (typeof showToast === 'function') showToast("⏳ Завантажую розклад...", "info");
-        const apiData = await fetchCalendarData(startDate, endDate);
-        const transformedData = transformCalendarData(apiData);
-        
-        let customView = document.getElementById('custom-calendar-view');
-        if (!customView) {
-            customView = document.createElement('div');
-            customView.id = 'custom-calendar-view';
-            mainContainer.appendChild(customView);
-        }
-
-        originalCalendarView.style.display = 'none'; // Ховаємо тільки саму сітку
-        
-        customView.innerHTML = generateCalendarHtml(transformedData, startDate, endDate);
-        
-        // Додаємо обробник для кнопки закриття
-        customView.querySelector('#close-custom-calendar').onclick = () => {
-            customView.remove();
-            originalCalendarView.style.display = 'block'; // Показуємо стандартний календар
-        };
-
-        if (typeof showToast === 'function') showToast("✅ Розклад готовий!", "success");
-
-    } catch (e) {
-        console.error("Помилка при створенні календаря:", e);
-        if (typeof showToast === 'function') showToast("❌ Не вдалося завантажити розклад", "error");
-        originalCalendarView.style.display = 'block';
+    let customView = document.getElementById('custom-calendar-view');
+    if (!customView) {
+        customView = document.createElement('div');
+        customView.id = 'custom-calendar-view';
+        mainContainer.appendChild(customView);
     }
-}
 
-async function fetchCalendarData(startDate, endDate) {
-    const startISO = startDate.toISOString();
-    const endISO = endDate.toISOString();
-    const url = `https://ehr.h24.ua/api/v2/calendars?period_end=${endISO}&period_start=${startISO}&limit=100&offset=0&display_related=true`;
-    
-    const response = await fetch(url, {
-        headers: { 'Accept': 'application/json' },
-        credentials: 'include'
-    });
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    return response.json();
-}
+    originalCalendarView.style.display = 'none';
+    customView.innerHTML = `<div style="display:flex; justify-content:center; align-items:center; min-height: 400px;"><img src="https://mis.h24.ua/new/assets/images/loader.svg" style="width: 80px; height: 80px;"></div>`;
 
-function transformCalendarData(apiResponse) {
-    const dataByEmployee = {};
-    if (!apiResponse.calendar_items) return dataByEmployee;
-
-    apiResponse.calendar_items.forEach(day => {
-        day.employee_list.forEach(employee => {
-            if (!dataByEmployee[employee.id]) {
-                dataByEmployee[employee.id] = {
-                    name: `${employee.last_name} ${employee.first_name.charAt(0)}.${employee.second_name.charAt(0)}.`,
-                    position: employee.position,
-                    schedule: {}
-                };
-            }
-            const dateStr = day.date.split('.').reverse().join('-');
+    // Затримка, щоб браузер встиг показати лоадер
+    setTimeout(async () => {
+        try {
+            const apiData = await fetchCalendarData(startDate, endDate);
+            const transformedData = transformCalendarData(apiData);
             
-            const slots = employee.slots.map(slot => {
-                const startMatch = slot.visit_period_start?.match(/T(\d{2}:\d{2})/);
-                const endMatch = slot.visit_period_end?.match(/T(\d{2}:\d{2})/);
-                
-                if (slot.visits && slot.visits.length > 0) {
-                    return {
-                        start: startMatch ? startMatch[1] : '??:??',
-                        end: endMatch ? endMatch[1] : '??:??',
-                        patient: slot.visits[0].patient?.full_name || 'Запис',
-                        status: 'occupied'
-                    };
-                } else {
-                    return {
-                        start: startMatch ? startMatch[1] : '??:??',
-                        end: endMatch ? endMatch[1] : '??:??',
-                        patient: 'Вільно',
-                        status: 'free'
-                    };
-                }
-            });
+            customView.innerHTML = generateCalendarHtml(transformedData, startDate, endDate);
             
-            if (slots.length > 0) {
-                dataByEmployee[employee.id].schedule[dateStr] = slots;
-            }
-        });
-    });
-    return dataByEmployee;
+            customView.querySelector('#close-custom-calendar').onclick = () => {
+                customView.remove();
+                originalCalendarView.style.display = 'block';
+            };
+
+            if (typeof showToast === 'function') showToast("✅ Розклад готовий!", "success");
+
+        } catch (e) {
+            console.error("Помилка при створенні календаря:", e);
+            if (typeof showToast === 'function') showToast("❌ Не вдалося завантажити розклад", "error");
+            customView.remove();
+            originalCalendarView.style.display = 'block';
+        }
+    }, 50); // 50ms достатньо для перемальовки
 }
 
 function generateCalendarHtml(data, startDate, endDate) {
@@ -172,7 +126,7 @@ function generateCalendarHtml(data, startDate, endDate) {
         const employee = data[empId];
         let cells = '';
         for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-            const dateStr = d.toISOString().split('T')[0];
+            const dateStr = formatDateToYMD(d); // Уніфікований формат
             const slots = employee.schedule[dateStr];
             
             let cellContent = '';
@@ -210,4 +164,63 @@ function generateCalendarHtml(data, startDate, endDate) {
             <tbody>${bodyRows}</tbody>
         </table>
     `;
+}
+
+// --- DATA HANDLING ---
+async function fetchCalendarData(startDate, endDate) {
+    const startStr = formatDateToYMD(startDate);
+    const endStr = formatDateToYMD(endDate);
+    const url = `https://ehr.h24.ua/api/v2/calendars?period_end=${endStr}&period_start=${startStr}&limit=100&offset=0&display_related=true`;
+    
+    const response = await fetch(url, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'include'
+    });
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    return response.json();
+}
+
+function transformCalendarData(apiResponse) {
+    const dataByEmployee = {};
+    if (!apiResponse.calendar_items) return dataByEmployee;
+
+    apiResponse.calendar_items.forEach(day => {
+        day.employee_list.forEach(employee => {
+            if (!dataByEmployee[employee.id]) {
+                dataByEmployee[employee.id] = {
+                    name: `${employee.last_name} ${employee.first_name.charAt(0)}.${employee.second_name.charAt(0)}.`,
+                    position: employee.position,
+                    schedule: {}
+                };
+            }
+            const dateParts = day.date.split('.');
+            const dateStr = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`; // Конвертація ДД.ММ.РРРР в РРРР-ММ-ДД
+            
+            const slots = employee.slots.map(slot => {
+                const startMatch = slot.visit_period_start?.match(/T(\d{2}:\d{2})/);
+                const endMatch = slot.visit_period_end?.match(/T(\d{2}:\d{2})/);
+                
+                if (slot.visits && slot.visits.length > 0) {
+                    return {
+                        start: startMatch ? startMatch[1] : '??:??',
+                        end: endMatch ? endMatch[1] : '??:??',
+                        patient: slot.visits[0].patient?.full_name || 'Запис',
+                        status: 'occupied'
+                    };
+                } else {
+                    return {
+                        start: startMatch ? startMatch[1] : '??:??',
+                        end: endMatch ? endMatch[1] : '??:??',
+                        patient: 'Вільно',
+                        status: 'free'
+                    };
+                }
+            });
+            
+            if (slots.length > 0) {
+                dataByEmployee[employee.id].schedule[dateStr] = slots;
+            }
+        });
+    });
+    return dataByEmployee;
 }
