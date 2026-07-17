@@ -58,7 +58,8 @@ function showDateRangePicker() {
 
 async function renderCustomCalendar(mode, start, end) {
     const mainContainer = document.querySelector('.h24-calendar-container');
-    if (!mainContainer) return;
+    const originalCalendarView = mainContainer?.querySelector('.h24-week-view-container, .h24-day-view-container');
+    if (!mainContainer || !originalCalendarView) return;
 
     let startDate, endDate;
     if (mode === 'month') {
@@ -79,17 +80,25 @@ async function renderCustomCalendar(mode, start, end) {
         if (!customView) {
             customView = document.createElement('div');
             customView.id = 'custom-calendar-view';
-            mainContainer.parentNode.insertBefore(customView, mainContainer.nextSibling);
+            mainContainer.appendChild(customView);
         }
 
-        mainContainer.style.display = 'none';
+        originalCalendarView.style.display = 'none'; // Ховаємо тільки саму сітку
+        
         customView.innerHTML = generateCalendarHtml(transformedData, startDate, endDate);
+        
+        // Додаємо обробник для кнопки закриття
+        customView.querySelector('#close-custom-calendar').onclick = () => {
+            customView.remove();
+            originalCalendarView.style.display = 'block'; // Показуємо стандартний календар
+        };
+
         if (typeof showToast === 'function') showToast("✅ Розклад готовий!", "success");
 
     } catch (e) {
         console.error("Помилка при створенні календаря:", e);
         if (typeof showToast === 'function') showToast("❌ Не вдалося завантажити розклад", "error");
-        mainContainer.style.display = 'block';
+        originalCalendarView.style.display = 'block';
     }
 }
 
@@ -187,11 +196,15 @@ function generateCalendarHtml(data, startDate, endDate) {
             .custom-calendar-th { text-align: center; font-size: 13px; background: #f5f5f5;}
             .doctor-name-cell { width: 180px; font-weight: bold; background: #f9f9f9; }
             .appointment-card { padding: 2px 4px; margin-bottom: 2px; font-size: 11px; border-radius: 3px; display:flex; justify-content:space-between; }
-            .appointment-card[data-status="occupied"] { background: #b1dcfc; border-left: 3px solid #84badf; } /* Новий колір для зайнятих */
-            .appointment-card[data-status="free"] { background: #febdb4; border-left: 3px solid #e0a39a; color: #555; } /* Новий колір для вільних */
+            .appointment-card[data-status="occupied"] { background: #b1dcfc; border-left: 3px solid #84badf; }
+            .appointment-card[data-status="free"] { background: #febdb4; border-left: 3px solid #e0a39a; color: #555; }
             .appointment-card .time { font-weight:bold; }
             .appointment-card .patient { text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 60%;}
+            .custom-calendar-header { display: flex; justify-content: flex-end; margin-bottom: 10px; }
         </style>
+        <div class="custom-calendar-header">
+            <button id="close-custom-calendar" class="irp-helper-btn __secondary">✖ Закрити огляд</button>
+        </div>
         <table class="custom-calendar-table">
             <thead><tr><th class="doctor-name-cell">Лікар</th>${dateHeaders}</tr></thead>
             <tbody>${bodyRows}</tbody>
