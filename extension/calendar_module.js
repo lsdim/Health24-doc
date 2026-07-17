@@ -147,8 +147,9 @@ function generateCalendarHtml(data, startDate, endDate) {
         <style>
             .custom-calendar-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
             .custom-calendar-th, .custom-calendar-td { border: 1px solid #e0e0e0; vertical-align: top; padding: 4px; font-size:12px; }
+            .custom-calendar-table thead th { position: sticky; top: 0; z-index: 10; } /* Дати прилипають зверху */
             .custom-calendar-th { text-align: center; font-size: 13px; background: #f5f5f5;}
-            .doctor-name-cell { width: 180px; font-weight: bold; background: #f9f9f9; }
+            .doctor-name-cell { width: 180px; font-weight: bold; background: #f9f9f9; border-bottom: 1px solid #cfcfcf; position: sticky; left: 0; z-index: 11; } /* Лікарі прилипають зліва */
             .appointment-card { padding: 2px 4px; margin-bottom: 2px; font-size: 11px; border-radius: 3px; display:flex; justify-content:space-between; }
             .appointment-card[data-status="occupied"] { background: #b1dcfc; border-left: 3px solid #84badf; }
             .appointment-card[data-status="free"] { background: #febdb4; border-left: 3px solid #e0a39a; color: #555; }
