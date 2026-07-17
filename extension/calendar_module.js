@@ -1,9 +1,32 @@
 // CONTEXT: This file is for the new Calendar view functionality.
 
+// --- CACHE for Encounter Reasons ---
+let encounterReasonColors = null;
+
 // --- UTILITY FUNCTIONS ---
 function formatDateToYMD(date) {
     const pad = (num) => num.toString().padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+async function getEncounterReasonColors() {
+    if (encounterReasonColors) {
+        return encounterReasonColors;
+    }
+    try {
+        const response = await fetch('https://ehr.h24.ua/api/v2/classifications/encounter_reasons', {
+            headers: { 'Accept': 'application/json' },
+            credentials: 'include'
+        });
+        if (!response.ok) throw new Error('Failed to fetch encounter reasons');
+        const reasons = await response.json();
+        encounterReasonColors = new Map(reasons.map(reason => [reason.id, reason.event_color]));
+        return encounterReasonColors;
+    } catch (error) {
+        console.error('Could not load encounter reason colors:', error);
+        encounterReasonColors = new Map(); // Порожня мапа у разі помилки
+        return encounterReasonColors;
+    }
 }
 
 // --- OBSERVER & BUTTON INJECTION ---
@@ -91,8 +114,13 @@ async function renderCustomCalendar(mode, start, end) {
 
     setTimeout(async () => {
         try {
-            const apiData = await fetchCalendarData(startDate, endDate);
-            const transformedData = transformCalendarData(apiData);
+            // Завантажуємо кольори паралельно з основним запитом
+            const colorsPromise = getEncounterReasonColors();
+            const apiDataPromise = fetchCalendarData(startDate, endDate);
+
+            const [colors, apiData] = await Promise.all([colorsPromise, apiDataPromise]);
+
+            const transformedData = transformCalendarData(apiData, colors);
             
             customView.innerHTML = generateCalendarHtml(transformedData, startDate, endDate);
             
@@ -119,21 +147,18 @@ function generateCalendarHtml(data, startDate, endDate) {
         const date = new Date(d);
         dates.push(date);
         const dateStr = formatDateToYMD(date);
-        // Перевіряємо, чи є хоча б один слот у цей день
         const hasSlots = Object.values(data).some(emp => emp.schedule[dateStr] && emp.schedule[dateStr].length > 0);
         if (!hasSlots) {
             emptyDays.add(dateStr);
         }
     }
 
-    // Динамічно створюємо шаблон для grid-template-columns
     const gridCols = dates.map(d => {
         const dateStr = formatDateToYMD(d);
-        return emptyDays.has(dateStr) ? 'minmax(20px, 0.5fr)' : 'minmax(55px, 1fr)';
+        return emptyDays.has(dateStr) ? 'minmax(20px, 0.5fr)' : 'minmax(25px, 1fr)';
     }).join(' ');
 
-    // --- Grid Header ---
-    let headerHtml = '<div class="doctor-name-cell">Лікар</div>'; // Top-left corner
+    let headerHtml = '<div class="doctor-name-cell">Лікар</div>';
     headerHtml += dates.map(d => {
         const day = d.getDate();
         const weekday = d.toLocaleDateString('uk-UA', { weekday: 'short' });
@@ -141,13 +166,10 @@ function generateCalendarHtml(data, startDate, endDate) {
         return `<div class="custom-calendar-th ${isEmpty ? 'empty-day' : ''}">${day}<br><small>${weekday}</small></div>`;
     }).join('');
 
-    // --- Grid Body ---
     let bodyHtml = '';
     for (const empId in data) {
         const employee = data[empId];
-        // Doctor name cell for this row
         bodyHtml += `<div class="doctor-name-cell">${employee.name}<br><small>${employee.position}</small></div>`;
-        // Date cells for this row
         bodyHtml += dates.map(d => {
             const dateStr = formatDateToYMD(d);
             const slots = employee.schedule[dateStr];
@@ -155,7 +177,8 @@ function generateCalendarHtml(data, startDate, endDate) {
             if (slots && slots.length > 0) {
                 cellContent = slots.map(slot => {
                     const tooltip = `${slot.start}-${slot.end} - ${slot.patient}`;
-                    return `<div class="calendar-slot-card" data-status="${slot.status}" title="${tooltip}">
+                    const borderColor = slot.status === 'occupied' ? slot.color : '#e0a39a';
+                    return `<div class="calendar-slot-card" data-status="${slot.status}" title="${tooltip}" style="border-left-color: ${borderColor};">
                                 <span class="slot-time">${slot.start}</span>
                                 <span class="slot-patient">${slot.patient}</span>
                             </div>`;
@@ -168,68 +191,18 @@ function generateCalendarHtml(data, startDate, endDate) {
 
     return `
         <style>
-            .custom-calendar-grid-wrapper {
-                max-height: 80vh; /* Обмеження висоти для внутрішньої прокрутки */
-                overflow: auto; /* Прокрутка в обидві сторони */
-                border: 1px solid #ccc;
-            }
-            .custom-calendar-grid {
-                display: grid;
-                grid-template-columns: 120px ${gridCols}; /* Динамічна ширина колонок */
-                width: fit-content; /* Ширина по вмісту */
-            }
-            .custom-calendar-th, .doctor-name-cell, .custom-calendar-td {
-                padding: 4px;
-                border-bottom: 1px solid #e0e0e0;
-                border-right: 1px solid #e0e0e0;
-            }
-            /* Липка шапка */
-            .custom-calendar-th {
-                position: sticky;
-                top: 0;
-                background: #f5f5f5;
-                text-align: center;
-                font-size: 11px;
-                z-index: 10;
-            }
-            /* Липка колонка */
-            .doctor-name-cell {
-                position: sticky;
-                left: 0;
-                background: #f9f9f9;
-                font-weight: bold;
-                font-size: 11px;
-                z-index: 11;
-                text-align: left;
-            }
-            /* Липкий кут */
-            .custom-calendar-grid > .doctor-name-cell:first-child {
-                z-index: 12;
-            }
-            .empty-day {
-                background-color: #fafafa; /* Світло-сірий фон для вихідних */
-            }
-            
+            .custom-calendar-grid-wrapper { max-height: 80vh; overflow: auto; border: 1px solid #ccc; }
+            .custom-calendar-grid { display: grid; grid-template-columns: 120px ${gridCols}; width: 100%; }
+            .custom-calendar-th, .doctor-name-cell, .custom-calendar-td { padding: 4px; border-bottom: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; }
+            .custom-calendar-th { position: sticky; top: 0; background: #f5f5f5; text-align: center; font-size: 11px; z-index: 10; }
+            .doctor-name-cell { position: sticky; left: 0; background: #f9f9f9; font-weight: bold; font-size: 11px; z-index: 11; text-align: left; }
+            .custom-calendar-grid > .doctor-name-cell:first-child { z-index: 12; }
+            .empty-day { background-color: #fafafa; }
             .custom-calendar-header { display: flex; justify-content: flex-end; margin-bottom: 10px; }
-            
-            /* Картка слоту */
-            .calendar-slot-card {
-                padding: 1px 2px;
-                margin-bottom: 1px;
-                font-size: 10px;
-                border-radius: 2px;
-                display: block;
-                min-height: 25px;
-            }
-            .calendar-slot-card[data-status="occupied"] { background-color: #b1dcfc; border-left: 3px solid #84badf; }
-            .calendar-slot-card[data-status="free"] { background-color: #febdb4; border-left: 3px solid #e0a39a; color: #555; }
-            .slot-time, .slot-patient {
-                display: block;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                line-height: 1.2;
-            }
+            .calendar-slot-card { padding: 1px 2px; margin-bottom: 1px; font-size: 10px; border-radius: 2px; display: block; min-height: 25px; border-left: 3px solid; }
+            .calendar-slot-card[data-status="occupied"] { background-color: #b1dcfc; }
+            .calendar-slot-card[data-status="free"] { background-color: #febdb4; }
+            .slot-time, .slot-patient { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
             .slot-time { font-weight: bold; }
         </style>
         <div class="custom-calendar-header">
@@ -258,7 +231,7 @@ async function fetchCalendarData(startDate, endDate) {
     return response.json();
 }
 
-function transformCalendarData(apiResponse) {
+function transformCalendarData(apiResponse, colors) {
     const dataByEmployee = {};
     if (!apiResponse.calendar_items) return dataByEmployee;
 
@@ -279,24 +252,26 @@ function transformCalendarData(apiResponse) {
                 const endMatch = slot.visit_period_end?.match(/T(\d{2}:\d{2})/);
                 
                 if (slot.visits && slot.visits.length > 0) {
-                    const patientData = slot.visits[0].patient;
+                    const visit = slot.visits[0];
                     let patientName = 'Запис';
-                    if (patientData) {
-                        patientName = `${patientData.last_name || ''} ${patientData.first_name || ''} ${patientData.second_name || ''}`.trim();
+                    if (visit.patient) {
+                        patientName = `${visit.patient.last_name || ''} ${visit.patient.first_name || ''} ${visit.patient.second_name || ''}`.trim();
                     }
 
                     return {
                         start: startMatch ? startMatch[1] : '??:??',
                         end: endMatch ? endMatch[1] : '??:??',
                         patient: patientName,
-                        status: 'occupied'
+                        status: 'occupied',
+                        color: colors.get(visit.encounter_reason_id) || '#84badf' // Використовуємо колір з мапи або дефолтний
                     };
                 } else {
                     return {
                         start: startMatch ? startMatch[1] : '??:??',
                         end: endMatch ? endMatch[1] : '??:??',
                         patient: 'Вільно',
-                        status: 'free'
+                        status: 'free',
+                        color: '#e0a39a' // Дефолтний колір для вільних
                     };
                 }
             });
