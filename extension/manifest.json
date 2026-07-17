@@ -21,11 +21,12 @@
   "content_scripts": [
     {
       "matches": ["https://mis.h24.ua/*"],
-      "js": ["constants.js", "content.js", "pt_module.js"],
+      "js": ["constants.js", "content.js", "pt_module.js", "calendar_module.js"],
       "css": ["content.css"]
     }
   ],
   "host_permissions": [
-    "https://generativelanguage.googleapis.com/*"
+    "https://generativelanguage.googleapis.com/*",
+    "https://ehr.h24.ua/*"
   ]
 }
