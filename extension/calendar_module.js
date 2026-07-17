@@ -133,8 +133,8 @@ function generateCalendarHtml(data, startDate, endDate) {
             if (slots && slots.length > 0) {
                 cellContent = slots.map(slot => 
                     `<div class="appointment-card" data-status="${slot.status}">
-                        <span class="time">${slot.start}-${slot.end}</span>
-                        <span class="patient">${slot.patient}</span>
+                        <span class="time" title="${slot.patient}">${slot.start}-${slot.end}</span>
+                        <span class="patient" title="${slot.patient}">${slot.patient}</span>
                     </div>`
                 ).join('');
             }
@@ -201,10 +201,16 @@ function transformCalendarData(apiResponse) {
                 const endMatch = slot.visit_period_end?.match(/T(\d{2}:\d{2})/);
                 
                 if (slot.visits && slot.visits.length > 0) {
+                    const patientData = slot.visits[0].patient;
+                    let patientName = 'Запис';
+                    if (patientData) {
+                        patientName = `${patientData.last_name || ''} ${patientData.first_name || ''} ${patientData.second_name || ''}`.trim();
+                    }
+
                     return {
                         start: startMatch ? startMatch[1] : '??:??',
                         end: endMatch ? endMatch[1] : '??:??',
-                        patient: slot.visits[0].patient?.full_name || 'Запис',
+                        patient: patientName,
                         status: 'occupied'
                     };
                 } else {
