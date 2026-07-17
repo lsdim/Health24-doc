@@ -10,7 +10,7 @@ function addCalendarViewButton() {
     if (calendarHeader && !calendarHeader.querySelector('.calendar-view-btn')) {
         const wrapper = document.createElement('div');
         wrapper.className = 'calendar-controls-wrapper';
-        wrapper.style.marginLeft = 'auto'; // Щоб кнопки були праворуч
+        wrapper.style.marginLeft = 'auto';
 
         const monthBtn = document.createElement('button');
         monthBtn.innerText = '🗓️ Місяць';
@@ -29,12 +29,10 @@ function addCalendarViewButton() {
 }
 
 function showDateRangePicker() {
-    // Створюємо модальне вікно для вибору діапазону
     const overlay = document.createElement('div');
     overlay.className = 'irp-overlay-bg';
     const panel = document.createElement('div');
     panel.className = 'irp-raw-data-panel';
-    
     const today = new Date().toISOString().split('T')[0];
 
     panel.innerHTML = `
@@ -59,8 +57,8 @@ function showDateRangePicker() {
 }
 
 async function renderCustomCalendar(mode, start, end) {
-    const mainCalendarContainer = document.querySelector('.h24-calendar-container');
-    if (!mainCalendarContainer) return;
+    const mainContainer = document.querySelector('.h24-calendar-container');
+    if (!mainContainer) return;
 
     let startDate, endDate;
     if (mode === 'month') {
@@ -70,57 +68,47 @@ async function renderCustomCalendar(mode, start, end) {
     } else if (mode === 'range' && start && end) {
         startDate = new Date(start);
         endDate = new Date(end);
-    } else {
-        return; // Нічого не робити, якщо діапазон не обрано
-    }
+    } else return;
 
     try {
         if (typeof showToast === 'function') showToast("⏳ Завантажую розклад...", "info");
         const apiData = await fetchCalendarData(startDate, endDate);
         const transformedData = transformCalendarData(apiData);
         
-        // Створюємо новий контейнер для нашого календаря
         let customView = document.getElementById('custom-calendar-view');
         if (!customView) {
             customView = document.createElement('div');
             customView.id = 'custom-calendar-view';
-            mainCalendarContainer.parentNode.insertBefore(customView, mainCalendarContainer.nextSibling);
+            mainContainer.parentNode.insertBefore(customView, mainContainer.nextSibling);
         }
 
-        // Ховаємо стандартний календар
-        mainCalendarContainer.style.display = 'none';
-        
-        // Генеруємо HTML
+        mainContainer.style.display = 'none';
         customView.innerHTML = generateCalendarHtml(transformedData, startDate, endDate);
-        
-        if (typeof showToast === 'function') showToast("✅ Розклад за місяць готовий!", "success");
+        if (typeof showToast === 'function') showToast("✅ Розклад готовий!", "success");
 
     } catch (e) {
         console.error("Помилка при створенні календаря:", e);
         if (typeof showToast === 'function') showToast("❌ Не вдалося завантажити розклад", "error");
-        // Повертаємо стандартний календар у разі помилки
-        mainCalendarContainer.style.display = 'block';
+        mainContainer.style.display = 'block';
     }
 }
 
 async function fetchCalendarData(startDate, endDate) {
     const startISO = startDate.toISOString();
     const endISO = endDate.toISOString();
-    // URL для запиту
     const url = `https://ehr.h24.ua/api/v2/calendars?period_end=${endISO}&period_start=${startISO}&limit=100&offset=0&display_related=true`;
     
     const response = await fetch(url, {
         headers: { 'Accept': 'application/json' },
-        credentials: 'include' // Включаємо cookie для авторизації
+        credentials: 'include'
     });
-    if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-    }
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
     return response.json();
 }
 
 function transformCalendarData(apiResponse) {
     const dataByEmployee = {};
+    if (!apiResponse.calendar_items) return dataByEmployee;
 
     apiResponse.calendar_items.forEach(day => {
         day.employee_list.forEach(employee => {
@@ -131,27 +119,31 @@ function transformCalendarData(apiResponse) {
                     schedule: {}
                 };
             }
-            const dateStr = day.date.split('.').reverse().join('-'); // "16.07.2026" -> "2026-07-16"
+            const dateStr = day.date.split('.').reverse().join('-');
             
-            // Виправлена логіка: проходимо по слотах, і для кожного візиту в слоті беремо час самого слота
-            const visits = employee.slots.flatMap(slot => {
-                if (!slot.visits || slot.visits.length === 0) {
-                    return []; // Якщо у слоті немає візитів, пропускаємо
-                }
-                // Для кожного візиту повертаємо об'єкт з часом слота та пацієнтом візиту
-                return slot.visits.map(visit => {
-                    const startMatch = slot.visit_period_start ? slot.visit_period_start.match(/T(\d{2}:\d{2})/) : null;
-                    const endMatch = slot.visit_period_end ? slot.visit_period_end.match(/T(\d{2}:\d{2})/) : null;
+            const slots = employee.slots.map(slot => {
+                const startMatch = slot.visit_period_start?.match(/T(\d{2}:\d{2})/);
+                const endMatch = slot.visit_period_end?.match(/T(\d{2}:\d{2})/);
+                
+                if (slot.visits && slot.visits.length > 0) {
                     return {
                         start: startMatch ? startMatch[1] : '??:??',
                         end: endMatch ? endMatch[1] : '??:??',
-                        patient: visit.patient?.full_name || 'Запис без пацієнта'
+                        patient: slot.visits[0].patient?.full_name || 'Запис',
+                        status: 'occupied'
                     };
-                });
+                } else {
+                    return {
+                        start: startMatch ? startMatch[1] : '??:??',
+                        end: endMatch ? endMatch[1] : '??:??',
+                        patient: 'Вільно',
+                        status: 'free'
+                    };
+                }
             });
             
-            if (visits.length > 0) {
-                dataByEmployee[employee.id].schedule[dateStr] = visits;
+            if (slots.length > 0) {
+                dataByEmployee[employee.id].schedule[dateStr] = slots;
             }
         });
     });
@@ -161,7 +153,6 @@ function transformCalendarData(apiResponse) {
 function generateCalendarHtml(data, startDate, endDate) {
     let dateHeaders = '';
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-        const dateStr = d.toISOString().split('T')[0];
         const day = d.getDate();
         const weekday = d.toLocaleDateString('uk-UA', { weekday: 'short' });
         dateHeaders += `<th class="custom-calendar-th">${day}<br><small>${weekday}</small></th>`;
@@ -173,14 +164,14 @@ function generateCalendarHtml(data, startDate, endDate) {
         let cells = '';
         for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
             const dateStr = d.toISOString().split('T')[0];
-            const visits = employee.schedule[dateStr];
+            const slots = employee.schedule[dateStr];
             
             let cellContent = '';
-            if (visits && visits.length > 0) {
-                cellContent = visits.map(v => 
-                    `<div class="appointment-card">
-                        <span class="time">${v.start}-${v.end}</span>
-                        <span class="patient">${v.patient}</span>
+            if (slots && slots.length > 0) {
+                cellContent = slots.map(slot => 
+                    `<div class="appointment-card" data-status="${slot.status}">
+                        <span class="time">${slot.start}-${slot.end}</span>
+                        <span class="patient">${slot.patient}</span>
                     </div>`
                 ).join('');
             }
@@ -192,12 +183,14 @@ function generateCalendarHtml(data, startDate, endDate) {
     return `
         <style>
             .custom-calendar-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-            .custom-calendar-th, .custom-calendar-td { border: 1px solid #e0e0e0; vertical-align: top; padding: 4px; }
+            .custom-calendar-th, .custom-calendar-td { border: 1px solid #e0e0e0; vertical-align: top; padding: 4px; font-size:12px; }
             .custom-calendar-th { text-align: center; font-size: 13px; background: #f5f5f5;}
-            .doctor-name-cell { width: 180px; font-weight: bold; background: #f9f9f9; font-size:12px; }
-            .appointment-card { background: #e3f2fd; border-left: 3px solid #90caf9; padding: 2px 4px; margin-bottom: 2px; font-size: 11px; border-radius: 2px; display:flex; justify-content:space-between; }
+            .doctor-name-cell { width: 180px; font-weight: bold; background: #f9f9f9; }
+            .appointment-card { padding: 2px 4px; margin-bottom: 2px; font-size: 11px; border-radius: 3px; display:flex; justify-content:space-between; }
+            .appointment-card[data-status="occupied"] { background: #b1dcfc; border-left: 3px solid #84badf; } /* Новий колір для зайнятих */
+            .appointment-card[data-status="free"] { background: #febdb4; border-left: 3px solid #e0a39a; color: #555; } /* Новий колір для вільних */
             .appointment-card .time { font-weight:bold; }
-            .appointment-card .patient { text-align:right; }
+            .appointment-card .patient { text-align:right; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width: 60%;}
         </style>
         <table class="custom-calendar-table">
             <thead><tr><th class="doctor-name-cell">Лікар</th>${dateHeaders}</tr></thead>
