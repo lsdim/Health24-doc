@@ -129,6 +129,14 @@ async function renderCustomCalendar(mode, start, end) {
                 originalCalendarView.style.display = 'block';
             };
 
+            // Обробник кліків для відкриття модального вікна
+            customView.querySelector('.custom-calendar-grid').addEventListener('click', (e) => {
+                const card = e.target.closest('.calendar-slot-card[data-status="occupied"]');
+                if (card && card.dataset.visitId) {
+                    showVisitModal(card.dataset.visitId);
+                }
+            });
+
             if (typeof showToast === 'function') showToast("✅ Розклад готовий!", "success");
 
         } catch (e) {
@@ -177,8 +185,9 @@ function generateCalendarHtml(data, startDate, endDate) {
             if (slots && slots.length > 0) {
                 cellContent = slots.map(slot => {
                     const tooltip = `${slot.start}-${slot.end} - ${slot.patient}`;
+                    const visitIdAttr = slot.visitId ? `data-visit-id="${slot.visitId}"` : '';
                     const borderColor = slot.status === 'occupied' ? slot.color : '#e0a39a';
-                    return `<div class="calendar-slot-card" data-status="${slot.status}" title="${tooltip}" style="border-left-color: ${borderColor};">
+                    return `<div class="calendar-slot-card" data-status="${slot.status}" title="${tooltip}" ${visitIdAttr} style="border-left-color: ${borderColor};">
                                 <span class="slot-time">${slot.start}</span>
                                 <span class="slot-patient">${slot.patient}</span>
                             </div>`;
@@ -200,7 +209,7 @@ function generateCalendarHtml(data, startDate, endDate) {
             .empty-day { background-color: #fafafa; }
             .custom-calendar-header { display: flex; justify-content: flex-end; margin-bottom: 10px; }
             .calendar-slot-card { padding: 1px 2px; margin-bottom: 1px; font-size: 10px; border-radius: 2px; display: block; min-height: 25px; border-left: 3px solid; }
-            .calendar-slot-card[data-status="occupied"] { background-color: #b1dcfc; }
+            .calendar-slot-card[data-status="occupied"] { background-color: #b1dcfc; cursor: pointer; }
             .calendar-slot-card[data-status="free"] { background-color: #febdb4; }
             .slot-time, .slot-patient { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
             .slot-time { font-weight: bold; }
@@ -215,6 +224,57 @@ function generateCalendarHtml(data, startDate, endDate) {
             </div>
         </div>
     `;
+}
+
+// --- MODAL WINDOW ---
+async function showVisitModal(visitId) {
+    // Показати лоадер
+    const overlay = document.createElement('div');
+    overlay.className = 'irp-overlay-bg';
+    overlay.innerHTML = `<div style="display:flex; justify-content:center; align-items:center; height: 100%;"><img src="https://mis.h24.ua/new/assets/images/loader.svg" style="width: 80px; height: 80px;"></div>`;
+    document.body.appendChild(overlay);
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+    try {
+        const visitResponse = await fetch(`https://ehr.h24.ua/api/v2/ehr/visits/${visitId}?response_view=calendar`, { credentials: 'include' });
+        if (!visitResponse.ok) throw new Error('Failed to fetch visit data');
+        const visitData = await visitResponse.json();
+
+        const patientId = visitData.patient?.id;
+        if (!patientId) throw new Error('Patient ID not found in visit data');
+
+        const patientResponse = await fetch(`https://ehr.h24.ua/api/patients/${patientId}`, { credentials: 'include' });
+        if (!patientResponse.ok) throw new Error('Failed to fetch patient data');
+        const patientData = await patientResponse.json();
+        
+        // Отримати назву причини візиту
+        const colors = await getEncounterReasonColors();
+        const reasonTitle = Array.from(colors.entries()).find(([id]) => id === visitData.encounter_reason_id)?.[1] || 'Не вказано';
+
+        // Формуємо HTML модального вікна
+        const modalHtml = `
+            <div class="irp-raw-data-panel" style="max-width: 500px;">
+                <div class="irp-raw-data-header">
+                    <strong>${patientData.last_name} ${patientData.first_name} ${patientData.second_name}</strong>
+                    <button id="close-modal-btn" class="irp-helper-btn __secondary" style="position: absolute; top: 10px; right: 10px;">✖</button>
+                </div>
+                <p><strong>Дата народження:</strong> ${patientData.birth_date || 'Не вказано'}</p>
+                <p><strong>Телефон:</strong> ${patientData.person?.phones?.[0]?.number || 'Не вказано'}</p>
+                <hr>
+                <p><strong>Лікар:</strong> ${visitData.employee?.name || 'Не вказано'}</p>
+                <p><strong>Час:</strong> ${new Date(visitData.period_start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${new Date(visitData.period_end).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</p>
+                <p><strong>Причина:</strong> ${reasonTitle}</p>
+                <p><strong>Коментар:</strong> ${visitData.comment || 'Немає'}</p>
+            </div>
+        `;
+        
+        overlay.innerHTML = modalHtml;
+        overlay.querySelector('#close-modal-btn').onclick = () => overlay.remove();
+
+    } catch (error) {
+        console.error('Error showing visit modal:', error);
+        overlay.innerHTML = `<div class="irp-raw-data-panel"><p>❌ Не вдалося завантажити дані візиту.</p></div>`;
+    }
 }
 
 // --- DATA HANDLING ---
@@ -263,7 +323,8 @@ function transformCalendarData(apiResponse, colors) {
                         end: endMatch ? endMatch[1] : '??:??',
                         patient: patientName,
                         status: 'occupied',
-                        color: colors.get(visit.encounter_reason_id) || '#84badf' // Використовуємо колір з мапи або дефолтний
+                        color: colors.get(visit.encounter_reason_id) || '#84badf',
+                        visitId: visit.visit_id
                     };
                 } else {
                     return {
@@ -271,7 +332,7 @@ function transformCalendarData(apiResponse, colors) {
                         end: endMatch ? endMatch[1] : '??:??',
                         patient: 'Вільно',
                         status: 'free',
-                        color: '#e0a39a' // Дефолтний колір для вільних
+                        color: '#e0a39a'
                     };
                 }
             });
