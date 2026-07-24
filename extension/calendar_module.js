@@ -117,10 +117,33 @@ async function renderCustomCalendar(mode, start, end) {
             
             customView.innerHTML = generateCalendarHtml(transformedData, startDate, endDate);
             
+            // Обробник закриття
             customView.querySelector('#close-custom-calendar').onclick = () => {
                 customView.remove();
                 originalCalendarView.style.display = 'block';
             };
+
+            // --- НОВЕ: Обробник пошуку та фільтрації пацієнтів ---
+            const searchInput = customView.querySelector('#patient-search-field');
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.trim().toLowerCase();
+                const slots = customView.querySelectorAll('.calendar-slot-card[data-status="occupied"]');
+
+                slots.forEach(slot => {
+                    const patientName = slot.querySelector('.slot-patient')?.textContent.toLowerCase() || '';
+                    
+                    if (query.length > 0 && patientName.includes(query)) {
+                        slot.classList.add('slot-highlighted');
+                        slot.classList.remove('slot-dimmed');
+                    } else if (query.length > 0) {
+                        slot.classList.remove('slot-highlighted');
+                        slot.classList.add('slot-dimmed');
+                    } else {
+                        // Якщо інпут порожній — скидаємо всі стилі
+                        slot.classList.remove('slot-highlighted', 'slot-dimmed');
+                    }
+                });
+            });
 
             customView.querySelector('.custom-calendar-grid').addEventListener('click', (e) => {
                 const card = e.target.closest('.calendar-slot-card[data-status="occupied"]');
@@ -142,6 +165,113 @@ async function renderCustomCalendar(mode, start, end) {
 }
 
 function generateCalendarHtml(data, startDate, endDate) {
+    const dates = [];
+    const emptyDays = new Set();
+    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
+        const date = new Date(d);
+        dates.push(date);
+        const dateStr = formatDateToYMD(date);
+        const hasSlots = Object.values(data).some(emp => emp.schedule[dateStr] && emp.schedule[dateStr].length > 0);
+        if (!hasSlots) {
+            emptyDays.add(dateStr);
+        }
+    }
+
+    const gridCols = dates.map(d => {
+        const dateStr = formatDateToYMD(d);
+        return emptyDays.has(dateStr) ? 'minmax(20px, 0.5fr)' : 'minmax(25px, 1fr)';
+    }).join(' ');
+
+    let headerHtml = '<div class="doctor-name-cell">Лікар</div>';
+    headerHtml += dates.map(d => {
+        const day = d.getDate();
+        const weekday = d.toLocaleDateString('uk-UA', { weekday: 'short' });
+        const isEmpty = emptyDays.has(formatDateToYMD(d));
+        return `<div class="custom-calendar-th ${isEmpty ? 'empty-day' : ''}">${day}<br><small>${weekday}</small></div>`;
+    }).join('');
+
+    let bodyHtml = '';
+    for (const empId in data) {
+        const employee = data[empId];
+        bodyHtml += `<div class="doctor-name-cell">${employee.name}<br><small>${employee.position}</small></div>`;
+        bodyHtml += dates.map(d => {
+            const dateStr = formatDateToYMD(d);
+            const slots = employee.schedule[dateStr] || [];
+            let cellContent = '';
+            if (slots && slots.length > 0) {
+                cellContent = slots.map(slot => {
+                    const tooltip = `${slot.start}-${slot.end} - ${slot.patient}`;
+                    const slotData = JSON.stringify(slot);
+                    return `<div class="calendar-slot-card" data-status="${slot.status}" title="${tooltip}" data-slot-data='${slotData}' style="border-left-color: ${slot.color};">
+                                <span class="slot-time">${slot.start}</span>
+                                <span class="slot-patient">${slot.patient}</span>
+                            </div>`;
+                }).join('');
+            }
+            const isEmpty = emptyDays.has(dateStr);
+            return `<div class="custom-calendar-td ${isEmpty ? 'empty-day' : ''}">${cellContent}</div>`;
+        }).join('');
+    }
+
+    return `
+        <style>
+            .custom-calendar-grid-wrapper { max-height: 80vh; overflow: auto; border: 1px solid #ccc; }
+            .custom-calendar-grid { display: grid; grid-template-columns: 120px ${gridCols}; width: 100%; }
+            .custom-calendar-th, .doctor-name-cell, .custom-calendar-td { padding: 4px; border-bottom: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; }
+            .custom-calendar-th { position: sticky; top: 0; background: #f5f5f5; text-align: center; font-size: 11px; z-index: 10; }
+            .doctor-name-cell { position: sticky; left: 0; background: #f9f9f9; font-weight: bold; font-size: 11px; z-index: 11; text-align: left; }
+            .custom-calendar-grid > .doctor-name-cell:first-child { z-index: 12; }
+            .empty-day { background-color: #fafafa; }
+            
+            /* Шапка з пошуком */
+            .custom-calendar-header { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-bottom: 10px; }
+            .patient-search-input {
+                padding: 6px 12px;
+                border: 1px solid #ccc;
+                border-radius: 4px;
+                font-size: 13px;
+                width: 230px;
+                outline: none;
+                transition: border-color 0.2s;
+            }
+            .patient-search-input:focus {
+                border-color: #3182ce;
+            }
+
+            /* Слоти */
+            .calendar-slot-card { padding: 1px 2px; margin-bottom: 1px; font-size: 10px; border-radius: 2px; display: block; min-height: 25px; border-left: 3px solid; transition: all 0.2s; }
+            .calendar-slot-card[data-status="occupied"] { background-color: #b1dcfc; cursor: pointer; }
+            .calendar-slot-card[data-status="free"] { background-color: #febdb4; }
+            .slot-time, .slot-patient { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
+            .slot-time { font-weight: bold; }
+
+            /* Стилі для знайдених слотів та приглушення інших */
+            .calendar-slot-card.slot-highlighted {
+                background-color: #fff3cd !important;
+                border-color: #ffc107 !important;
+                box-shadow: 0 0 5px rgba(255, 193, 7, 0.9);
+                transform: scale(1.05);
+                z-index: 5;
+                position: relative;
+            }
+            .calendar-slot-card.slot-dimmed {
+                opacity: 0.25;
+            }
+        </style>
+        <div class="custom-calendar-header">
+            <input type="text" id="patient-search-field" class="patient-search-input" placeholder="🔍 Пошук пацієнта...">
+            <button id="close-custom-calendar" class="irp-helper-btn __secondary">✖ Закрити огляд</button>
+        </div>
+        <div class="custom-calendar-grid-wrapper">
+            <div class="custom-calendar-grid">
+                ${headerHtml}
+                ${bodyHtml}
+            </div>
+        </div>
+    `;
+}
+
+function old_generateCalendarHtml(data, startDate, endDate) {
     const dates = [];
     const emptyDays = new Set();
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
