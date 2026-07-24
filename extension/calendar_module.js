@@ -293,12 +293,19 @@ function generateCalendarHtml(data, startDate, endDate) {
 
         const uniquePatientsCount = uniquePatients.size;
         const loadPercentage = totalSlotsCount > 0 ? Math.round((occupiedSlotsCount / totalSlotsCount) * 100) : 0;
+		
+		// Рахуємо загальний час (1 візит = 30 хвилин)
+        const totalMinutes = occupiedSlotsCount * 30;
+        const hours = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        const timeStr = hours > 0 ? `${hours} год ${mins > 0 ? mins + ' хв' : ''}` : `${mins} хв`;
+        // =================
 
         bodyHtml += `
             <div class="doctor-name-cell">
                 <div class="doctor-card-info">
                     <div class="doctor-name">${employee.name}</div>
-                    <div class="doctor-position-badge">${employee.position || 'Лікар'}</div>
+                    <div class="doctor-position-badge" title="${employee.position || 'Лікар'}">${employee.position || 'Лікар'}</div>
                 </div>
 
                 <div class="doctor-stats-wrapper">
@@ -309,6 +316,10 @@ function generateCalendarHtml(data, startDate, endDate) {
                     <div class="stat-item" title="Кількість унікальних пацієнтів">
                         <span class="stat-icon">👤</span>
                         <span class="stat-value"><b>${uniquePatientsCount}</b> пац.</span>
+                    </div>
+					<div class="stat-item" title="Загальна тривалість прийомів">
+                        <span class="stat-icon">⏱️</span>
+                        <span class="stat-value"><b>${timeStr}</b></span>
                     </div>
                     <div class="stat-item" title="Відсоток завантаженості графіку">
                         <span class="stat-icon">📊</span>
