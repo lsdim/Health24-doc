@@ -156,7 +156,7 @@ function generateCalendarHtml(data, startDate, endDate) {
 
     const gridCols = dates.map(d => {
         const dateStr = formatDateToYMD(d);
-        return emptyDays.has(dateStr) ? 'minmax(20px, 0.5fr)' : 'minmax(55px, 1fr)';
+        return emptyDays.has(dateStr) ? 'minmax(20px, 0.5fr)' : 'minmax(25px, 1fr)';
     }).join(' ');
 
     let headerHtml = '<div class="doctor-name-cell">Лікар</div>';
@@ -283,7 +283,7 @@ async function showCustomVisitModal(slotData) {
                         <div class="h24-time-row">
                             <div class="h24-time-field">
                                 <span class="sub-label">час початку</span>
-                                <input type="text" class="h24-input center" value="${slotData.start.replace(':', ' ')}" readonly>
+                                <input type="text" class="h24-input center" value="${slotData.start}" readonly>
                             </div>
                             <div class="h24-time-field">
                                 <span class="sub-label">тривалість (хв)</span>
@@ -291,7 +291,7 @@ async function showCustomVisitModal(slotData) {
                             </div>
                             <div class="h24-time-field">
                                 <span class="sub-label">час завершення</span>
-                                <input type="text" class="h24-input center" value="${slotData.end.replace(':', ' ')}" readonly>
+                                <input type="text" class="h24-input center" value="${slotData.end}" readonly>
                             </div>
                         </div>
                     </div>
@@ -444,7 +444,7 @@ function transformCalendarData(apiResponse, colors) {
                         employeeId: employee.id,
                     };
                 } else {
-                    return { ...baseSlot, patient: 'Вільно', status: 'free', color: '#e0a39a' };
+                    return { ...baseSlot, patient: 'Вільно', status: 'free', color: '#febdb4' };
                 }
             });
         });
