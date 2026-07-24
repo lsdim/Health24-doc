@@ -117,6 +117,20 @@ async function renderCustomCalendar(mode, start, end) {
             
             customView.innerHTML = generateCalendarHtml(transformedData, startDate, endDate);
             
+			const searchHeaderEl = customView.querySelector('.custom-calendar-header');
+			const gridWrapperEl = customView.querySelector('.custom-calendar-grid-wrapper');
+
+			if (searchHeaderEl && gridWrapperEl) {
+				const observer = new ResizeObserver(entries => {
+					for (let entry of entries) {
+						const newHeight = entry.target.offsetHeight;
+						// Динамічно оновлюємо відступ для дат
+						gridWrapperEl.style.setProperty('--search-height', `${newHeight}px`);
+					}
+				});
+				observer.observe(searchHeaderEl);
+			}
+			
             // Обробник закриття
             customView.querySelector('#close-custom-calendar').onclick = () => {
                 customView.remove();
@@ -321,7 +335,7 @@ function generateCalendarHtml(data, startDate, endDate) {
                 }).join('');
             }
             const isEmpty = emptyDays.has(dateStr);
-            const isToday = dateStr === todayStr;
+            const isToday = dateStr === todayStr;		
 
             return `<div class="custom-calendar-td ${isEmpty ? 'empty-day' : ''} ${isToday ? 'is-today' : ''}">${cellContent}</div>`;
         }).join('');
@@ -329,10 +343,15 @@ function generateCalendarHtml(data, startDate, endDate) {
 
     return `
         <style>
-            .custom-calendar-grid-wrapper { max-height: 80vh; overflow: auto; border: 1px solid #ccc; }
+            .custom-calendar-grid-wrapper { --search-height: 52px; overflow: visible; border: 1px solid #ccc; }
             .custom-calendar-grid { display: grid; grid-template-columns: 120px ${gridCols}; width: 100%; }
             .custom-calendar-th, .doctor-name-cell, .custom-calendar-td { padding: 4px; border-bottom: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; }
-            .custom-calendar-th { position: sticky; top: 0; background: #f5f5f5; text-align: center; font-size: 11px; z-index: 10; }
+			.custom-calendar-th, .doctor-name-cell.header-cell {
+				position: sticky;
+				top: var(--search-height); /* 105px (шапка H24) + 52px (шапка пошуку) */
+				z-index: 90;
+			}
+            .custom-calendar-th { position: sticky; top: var(--search-height); background: #f5f5f5; text-align: center; font-size: 11px; z-index: 10; }
             
             /* Картка лікаря */
             .doctor-name-cell {
@@ -348,12 +367,12 @@ function generateCalendarHtml(data, startDate, endDate) {
 
             .doctor-card-info { margin-bottom: 4px; }
             .doctor-name {
-                font-weight: 700; color: #2d3748; line-height: 1.2; margin-bottom: 2px; font-size: 11px;
+                font-weight: 700; color: #2d3748; line-height: 1.2; margin-bottom: 2px; font-size: 13px;
                 word-break: break-word;
             }
             .doctor-position-badge {
                 display: inline-block; background: #e2e8f0; color: #4a5568;
-                padding: 1px 4px; border-radius: 3px; font-size: 10px; line-height: 1.1;
+                padding: 1px 4px; border-radius: 3px; font-size: 11px; line-height: 1.1;
                 max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
             }
 
@@ -363,7 +382,7 @@ function generateCalendarHtml(data, startDate, endDate) {
                 padding: 3px 4px; margin-top: 2px;
             }
             .stat-item {
-                display: flex; align-items: center; gap: 3px; font-size: 10px; color: #718096; margin-bottom: 1px;
+                display: flex; align-items: center; gap: 3px; font-size: 11px; color: #718096; margin-bottom: 1px;
             }
             .stat-icon { font-size: 9px; line-height: 1; }
             .stat-value b { color: #2b6cb0; }
@@ -391,7 +410,19 @@ function generateCalendarHtml(data, startDate, endDate) {
             }
 
             /* Шапка з пошуком */
-            .custom-calendar-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; gap: 15px; }
+            .custom-calendar-header { 
+				position: sticky; 
+				top: 0px; 
+				z-index: 20; /* Високий z-index, щоб перекривати картки при скролі */
+				background-color: #ffffff; 
+				padding: 10px 5px; 
+				margin-bottom: 0; 
+				display: flex; 
+				justify-content: space-between; 
+				align-items: flex-start; 
+				gap: 15px; 
+				border-bottom: 1px solid #e0e0e0;
+			}
             .search-box-container { display: flex; flex-direction: column; gap: 6px; flex-grow: 1; max-width: 650px; }
             .patient-search-input {
                 padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; width: 280px; outline: none; transition: border-color 0.2s;
