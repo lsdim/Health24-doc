@@ -165,7 +165,6 @@ async function renderCustomCalendar(mode, start, end) {
 }
 
 function generateCalendarHtml(data, startDate, endDate) {
-    // Отримуємо сьогоднішню дату у форматі YYYY-MM-DD
     const todayStr = formatDateToYMD(new Date());
 
     const dates = [];
@@ -185,7 +184,7 @@ function generateCalendarHtml(data, startDate, endDate) {
         return emptyDays.has(dateStr) ? 'minmax(20px, 0.5fr)' : 'minmax(25px, 1fr)';
     }).join(' ');
 
-    let headerHtml = '<div class="doctor-name-cell">Лікар</div>';
+    let headerHtml = '<div class="doctor-name-cell header-cell">Лікар / Інфо</div>';
     headerHtml += dates.map(d => {
         const day = d.getDate();
         const weekday = d.toLocaleDateString('uk-UA', { weekday: 'short' });
@@ -202,7 +201,57 @@ function generateCalendarHtml(data, startDate, endDate) {
     let bodyHtml = '';
     for (const empId in data) {
         const employee = data[empId];
-        bodyHtml += `<div class="doctor-name-cell">${employee.name}<br><small>${employee.position}</small></div>`;
+
+        // --- ОБРАХУНОК СТАТИСТИКИ (УНІКАЛЬНІ ПАЦІЄНТИ ТА ВІЗИТИ) ---
+        let totalSlotsCount = 0;
+        let occupiedSlotsCount = 0;
+        const uniquePatients = new Set();
+
+        dates.forEach(d => {
+            const dateStr = formatDateToYMD(d);
+            const slots = employee.schedule[dateStr] || [];
+            totalSlotsCount += slots.length;
+
+            slots.forEach(slot => {
+                if (slot.status === 'occupied') {
+                    occupiedSlotsCount++;
+                    if (slot.patient && slot.patient.trim() !== '') {
+                        uniquePatients.add(slot.patient.trim().toLowerCase());
+                    }
+                }
+            });
+        });
+
+        const uniquePatientsCount = uniquePatients.size;
+        const loadPercentage = totalSlotsCount > 0 ? Math.round((occupiedSlotsCount / totalSlotsCount) * 100) : 0;
+
+        // Компактний блок лікаря зі статистикою вгорі
+        bodyHtml += `
+            <div class="doctor-name-cell">
+                <div class="doctor-card-info">
+                    <div class="doctor-name">${employee.name}</div>
+                    <div class="doctor-position-badge">${employee.position || 'Лікар'}</div>
+                </div>
+
+                <div class="doctor-stats-wrapper">
+                    <div class="stat-item" title="Кількість заброньованих візитів">
+                        <span class="stat-icon">📅</span>
+                        <span class="stat-value"><b>${occupiedSlotsCount}</b> візит.</span>
+                    </div>
+                    <div class="stat-item" title="Кількість унікальних пацієнтів">
+                        <span class="stat-icon">👤</span>
+                        <span class="stat-value"><b>${uniquePatientsCount}</b> пац.</span>
+                    </div>
+                    <div class="stat-item" title="Відсоток завантаженості графіку">
+                        <span class="stat-icon">📊</span>
+                        <span class="stat-value"><b>${loadPercentage}%</b> завант.</span>
+                    </div>
+                    <div class="doctor-progress-bar" title="Прогрес завантаженості">
+                        <div class="doctor-progress-fill" style="width: ${loadPercentage}%;"></div>
+                    </div>
+                </div>
+            </div>`;
+
         bodyHtml += dates.map(d => {
             const dateStr = formatDateToYMD(d);
             const slots = employee.schedule[dateStr] || [];
@@ -227,50 +276,74 @@ function generateCalendarHtml(data, startDate, endDate) {
     return `
         <style>
             .custom-calendar-grid-wrapper { max-height: 80vh; overflow: auto; border: 1px solid #ccc; }
+            
+            /* Повернуто 120px для першої колонки */
             .custom-calendar-grid { display: grid; grid-template-columns: 120px ${gridCols}; width: 100%; }
             .custom-calendar-th, .doctor-name-cell, .custom-calendar-td { padding: 4px; border-bottom: 1px solid #e0e0e0; border-right: 1px solid #e0e0e0; }
             .custom-calendar-th { position: sticky; top: 0; background: #f5f5f5; text-align: center; font-size: 11px; z-index: 10; }
-            .doctor-name-cell { position: sticky; left: 0; background: #f9f9f9; font-weight: bold; font-size: 11px; z-index: 11; text-align: left; }
+            
+            /* Картка лікаря */
+            .doctor-name-cell {
+                position: sticky; left: 0; background: #ffffff;
+                font-size: 12px; z-index: 11; text-align: left;
+                box-shadow: 2px 0 5px rgba(0,0,0,0.03);
+                display: flex; flex-direction: column; justify-content: flex-start;
+            }
+            .doctor-name-cell.header-cell {
+                background: #f5f5f5; font-weight: bold; text-align: center; justify-content: center;
+            }
             .custom-calendar-grid > .doctor-name-cell:first-child { z-index: 12; }
+
+            .doctor-card-info { margin-bottom: 4px; }
+            .doctor-name {
+                font-weight: 700; color: #2d3748; line-height: 1.2; margin-bottom: 2px; font-size: 11px;
+                word-break: break-word;
+            }
+            .doctor-position-badge {
+                display: inline-block; background: #e2e8f0; color: #4a5568;
+                padding: 1px 4px; border-radius: 3px; font-size: 10px; line-height: 1.1;
+                max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            }
+
+            /* Компактна статистика під посадою */
+            .doctor-stats-wrapper {
+                background: #f8fafc; border: 1px solid #edf2f7; border-radius: 4px;
+                padding: 3px 4px; margin-top: 2px;
+            }
+            .stat-item {
+                display: flex; align-items: center; gap: 3px; font-size: 10px; color: #718096; margin-bottom: 1px;
+            }
+            .stat-icon { font-size: 9px; line-height: 1; }
+            .stat-value b { color: #2b6cb0; }
+
+            /* Міні прогрес-бар */
+            .doctor-progress-bar {
+                width: 100%; height: 3px; background: #e2e8f0; border-radius: 2px; overflow: hidden; margin-top: 2px;
+            }
+            .doctor-progress-fill {
+                height: 100%; background: #3182ce; transition: width 0.3s ease;
+            }
+
             .empty-day { background-color: #fafafa; }
             
-            /* Елегантне підсвічування сьогоднішнього дня */
+            /* Підсвічування сьогоднішнього дня */
             .custom-calendar-th.is-today {
-                background-color: #ebf8ff !important;
-                border-top: 3px solid #3182ce;
-                color: #2b6cb0;
-                font-weight: bold;
+                background-color: #ebf8ff !important; border-top: 3px solid #3182ce; color: #2b6cb0; font-weight: bold;
             }
             .custom-calendar-th.is-today .day-number {
-                display: inline-block;
-                background-color: #3182ce;
-                color: #ffffff;
-                border-radius: 50%;
-                width: 18px;
-                height: 18px;
-                line-height: 18px;
-                text-align: center;
-                margin-bottom: 2px;
+                display: inline-block; background-color: #3182ce; color: #ffffff;
+                border-radius: 50%; width: 18px; height: 18px; line-height: 18px; text-align: center; margin-bottom: 2px;
             }
             .custom-calendar-td.is-today {
-                background-color: #f7fafc; /* Дуже ніжний синювато-сірий фон для всієї колонки дня */
-                box-shadow: inset 1px 0 0 #bee3f8, inset -1px 0 0 #bee3f8; /* Тонкі рамки з боків */
+                background-color: #f7fafc; box-shadow: inset 1px 0 0 #bee3f8, inset -1px 0 0 #bee3f8;
             }
 
             /* Шапка з пошуком */
             .custom-calendar-header { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-bottom: 10px; }
             .patient-search-input {
-                padding: 6px 12px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                font-size: 13px;
-                width: 230px;
-                outline: none;
-                transition: border-color 0.2s;
+                padding: 6px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 13px; width: 230px; outline: none; transition: border-color 0.2s;
             }
-            .patient-search-input:focus {
-                border-color: #3182ce;
-            }
+            .patient-search-input:focus { border-color: #3182ce; }
 
             /* Слоти */
             .calendar-slot-card { padding: 1px 2px; margin-bottom: 1px; font-size: 10px; border-radius: 2px; display: block; min-height: 25px; border-left: 3px solid; transition: all 0.2s; }
@@ -279,18 +352,12 @@ function generateCalendarHtml(data, startDate, endDate) {
             .slot-time, .slot-patient { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
             .slot-time { font-weight: bold; }
 
-            /* Стилі для підсвічування пошуку */
+            /* Пошук */
             .calendar-slot-card.slot-highlighted {
-                background-color: #fff3cd !important;
-                border-color: #ffc107 !important;
-                box-shadow: 0 0 5px rgba(255, 193, 7, 0.9);
-                transform: scale(1.05);
-                z-index: 5;
-                position: relative;
+                background-color: #fff3cd !important; border-color: #ffc107 !important;
+                box-shadow: 0 0 5px rgba(255, 193, 7, 0.9); transform: scale(1.05); z-index: 5; position: relative;
             }
-            .calendar-slot-card.slot-dimmed {
-                opacity: 0.25;
-            }
+            .calendar-slot-card.slot-dimmed { opacity: 0.25; }
         </style>
         <div class="custom-calendar-header">
             <input type="text" id="patient-search-field" class="patient-search-input" placeholder="🔍 Пошук пацієнта...">
