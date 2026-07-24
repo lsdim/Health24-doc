@@ -165,6 +165,9 @@ async function renderCustomCalendar(mode, start, end) {
 }
 
 function generateCalendarHtml(data, startDate, endDate) {
+    // Отримуємо сьогоднішню дату у форматі YYYY-MM-DD
+    const todayStr = formatDateToYMD(new Date());
+
     const dates = [];
     const emptyDays = new Set();
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
@@ -186,8 +189,14 @@ function generateCalendarHtml(data, startDate, endDate) {
     headerHtml += dates.map(d => {
         const day = d.getDate();
         const weekday = d.toLocaleDateString('uk-UA', { weekday: 'short' });
-        const isEmpty = emptyDays.has(formatDateToYMD(d));
-        return `<div class="custom-calendar-th ${isEmpty ? 'empty-day' : ''}">${day}<br><small>${weekday}</small></div>`;
+        const dateStr = formatDateToYMD(d);
+        const isEmpty = emptyDays.has(dateStr);
+        const isToday = dateStr === todayStr;
+
+        return `<div class="custom-calendar-th ${isEmpty ? 'empty-day' : ''} ${isToday ? 'is-today' : ''}">
+                    <span class="day-number">${day}</span>
+                    <small>${weekday}</small>
+                </div>`;
     }).join('');
 
     let bodyHtml = '';
@@ -209,7 +218,9 @@ function generateCalendarHtml(data, startDate, endDate) {
                 }).join('');
             }
             const isEmpty = emptyDays.has(dateStr);
-            return `<div class="custom-calendar-td ${isEmpty ? 'empty-day' : ''}">${cellContent}</div>`;
+            const isToday = dateStr === todayStr;
+
+            return `<div class="custom-calendar-td ${isEmpty ? 'empty-day' : ''} ${isToday ? 'is-today' : ''}">${cellContent}</div>`;
         }).join('');
     }
 
@@ -223,6 +234,29 @@ function generateCalendarHtml(data, startDate, endDate) {
             .custom-calendar-grid > .doctor-name-cell:first-child { z-index: 12; }
             .empty-day { background-color: #fafafa; }
             
+            /* Елегантне підсвічування сьогоднішнього дня */
+            .custom-calendar-th.is-today {
+                background-color: #ebf8ff !important;
+                border-top: 3px solid #3182ce;
+                color: #2b6cb0;
+                font-weight: bold;
+            }
+            .custom-calendar-th.is-today .day-number {
+                display: inline-block;
+                background-color: #3182ce;
+                color: #ffffff;
+                border-radius: 50%;
+                width: 18px;
+                height: 18px;
+                line-height: 18px;
+                text-align: center;
+                margin-bottom: 2px;
+            }
+            .custom-calendar-td.is-today {
+                background-color: #f7fafc; /* Дуже ніжний синювато-сірий фон для всієї колонки дня */
+                box-shadow: inset 1px 0 0 #bee3f8, inset -1px 0 0 #bee3f8; /* Тонкі рамки з боків */
+            }
+
             /* Шапка з пошуком */
             .custom-calendar-header { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-bottom: 10px; }
             .patient-search-input {
@@ -245,7 +279,7 @@ function generateCalendarHtml(data, startDate, endDate) {
             .slot-time, .slot-patient { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2; }
             .slot-time { font-weight: bold; }
 
-            /* Стилі для знайдених слотів та приглушення інших */
+            /* Стилі для підсвічування пошуку */
             .calendar-slot-card.slot-highlighted {
                 background-color: #fff3cd !important;
                 border-color: #ffc107 !important;
