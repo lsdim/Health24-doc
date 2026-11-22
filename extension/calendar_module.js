@@ -41,6 +41,19 @@ function addCalendarViewButton() {
         const wrapper = document.createElement('div');
         wrapper.className = 'calendar-controls-wrapper';
         wrapper.style.marginLeft = 'auto';
+
+        // Кнопка створення записів на курс реабілітації
+        const bookBtn = document.createElement('button');
+        bookBtn.innerText = '➕ Записати пацієнта';
+        bookBtn.className = 'irp-helper-btn calendar-booking-open-btn';
+        bookBtn.style.backgroundColor = '#28a745';
+        bookBtn.style.marginRight = '8px';
+        bookBtn.onclick = () => {
+            if (typeof openAppointmentBookingModal === 'function') {
+                openAppointmentBookingModal();
+            }
+        };
+
         const monthBtn = document.createElement('button');
         monthBtn.innerText = '🗓️ Місяць';
         monthBtn.className = 'irp-helper-btn calendar-view-btn';
@@ -49,6 +62,8 @@ function addCalendarViewButton() {
         rangeBtn.innerText = '📅 Діапазон';
         rangeBtn.className = 'irp-helper-btn calendar-view-btn __secondary';
         rangeBtn.onclick = () => showDateRangePicker();
+
+        wrapper.appendChild(bookBtn);
         wrapper.appendChild(monthBtn);
         wrapper.appendChild(rangeBtn);
         calendarHeader.appendChild(wrapper);
@@ -136,6 +151,15 @@ async function renderCustomCalendar(mode, start, end) {
                 customView.remove();
                 originalCalendarView.style.display = 'block';
             };
+
+            const customBookBtn = customView.querySelector('#custom-cal-book-btn');
+            if (customBookBtn) {
+                customBookBtn.onclick = () => {
+                    if (typeof openAppointmentBookingModal === 'function') {
+                        openAppointmentBookingModal();
+                    }
+                };
+            }
 
             // --- Пошук та розрахунок статистики пацієнта ---
             const searchInput = customView.querySelector('#patient-search-field');
@@ -473,7 +497,10 @@ function generateCalendarHtml(data, startDate, endDate) {
                 <input type="text" id="patient-search-field" class="patient-search-input" placeholder="🔍 Пошук пацієнта...">
                 <div id="patient-stats-banner" class="patient-stats-banner" style="display: none;"></div>
             </div>
-            <button id="close-custom-calendar" class="irp-helper-btn __secondary">✖ Закрити огляд</button>
+            <div style="display: flex; gap: 8px;">
+                <button id="custom-cal-book-btn" class="irp-helper-btn" style="background-color: #28a745;">➕ Записати пацієнта</button>
+                <button id="close-custom-calendar" class="irp-helper-btn __secondary">✖ Закрити огляд</button>
+            </div>
         </div>
         <div class="custom-calendar-grid-wrapper">
             <div class="custom-calendar-grid">
